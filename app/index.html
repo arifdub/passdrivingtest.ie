@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- viewport-fit=cover is what makes env(safe-area-inset-*) available, which
+         is how the app clears the Dynamic Island and the home indicator. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
+    />
+
+    <title>PassDrivingTest.ie — Driver Theory Test practice</title>
+    <meta
+      name="description"
+      content="Practice questions, mock tests and flashcards for the Irish Driver Theory Test."
+    />
+
+    <!-- The app itself is behind a login and has nothing for a search engine to
+         index. The landing page at / is the page that should rank; without this
+         the two would compete for the same searches. -->
+    <meta name="robots" content="noindex, follow" />
+
+    <!-- Same icon set as the landing page. Sizes are all multiples of 48
+         because that is Google's requirement for the favicon it shows beside a
+         search result, and favicon.ico is listed first because that is the path
+         Google and older browsers try by convention with no link tag at all. -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PassDrivingTest" />
+
+    <!-- =====================================================================
+         GREEN PAPER — the landing page's light theme, applied to the app
+
+         WHY THIS IS CSS AND NOT 57 EDITS
+
+         The app paints its light surfaces with Tailwind utilities: 57 uses of
+         bg-white, 45 of border-slate-200, and so on, each paired with a dark:
+         variant. Editing them one by one would mean touching every component,
+         and the failure mode is silent — one missed class leaves a white card
+         sitting on a sage page and nobody notices until it ships.
+
+         Redefining what those utilities paint does the whole job in one place,
+         and it is reversible by deleting this block.
+
+         HOW IT WINS WITHOUT !important
+
+         `html:not(.dark) .bg-white` has specificity (0,2,1) against Tailwind's
+         own `.bg-white` at (0,1,0). Higher specificity wins regardless of
+         which stylesheet loads first, which matters because Tailwind's CSS is
+         injected by the JS bundle after this file's <head> has parsed.
+
+         DARK MODE IS UNTOUCHED
+
+         Every rule is gated on :not(.dark), and dark mode works by adding that
+         class to <html>. In dark mode none of this applies and the Tailwind
+         dark: variants paint as they always did.
+         ===================================================================== -->
+    <style>
+      :root {
+        /* The same four surfaces as the landing page, same values. */
+        --paper:      #eaf1e4;   /* the page */
+        --paper-2:    #e1eada;   /* secondary fills, progress tracks */
+        --paper-card: #f4f8f0;   /* cards, lifted off the page */
+        --paper-line: #d3ddcb;   /* borders */
+        --paper-line-soft: #dfe8d8;
+        --paper-deep: #c3d1b8;
+      }
+
+      /* Stops Android and Samsung Internet auto-darkening a light page, which
+         would invert the sage into something muddy. */
+      html:not(.dark) { color-scheme: light; }
+
+      /* The page itself, including the area behind a short screen. */
+      html:not(.dark), html:not(.dark) body { background-color: var(--paper); }
+
+      /* ---- surfaces ---- */
+      html:not(.dark) .bg-white      { background-color: var(--paper-card); }
+      html:not(.dark) .bg-slate-50   { background-color: var(--paper); }
+      html:not(.dark) .bg-slate-100  { background-color: var(--paper-2); }
+      html:not(.dark) .bg-slate-200  { background-color: var(--paper-line); }
+      html:not(.dark) .bg-slate-300  { background-color: var(--paper-deep); }
+
+      /* ---- borders and dividers ---- */
+      html:not(.dark) .border-slate-100  { border-color: var(--paper-line-soft); }
+      html:not(.dark) .border-slate-200  { border-color: var(--paper-line); }
+      html:not(.dark) .border-slate-300  { border-color: var(--paper-deep); }
+      html:not(.dark) .divide-slate-100 > * + * { border-color: var(--paper-line-soft); }
+
+      /* ---- tinted panels ----
+         Tailwind's emerald-50 and red-50 are cool mints and pinks mixed from
+         white. On a sage ground they read as a different material. These are
+         the same hues remixed from the paper colour instead. */
+      html:not(.dark) .bg-emerald-50  { background-color: #ddf0da; }
+      html:not(.dark) .bg-emerald-100 { background-color: #c9e7c4; }
+      html:not(.dark) .bg-red-50      { background-color: #fbe9e6; }
+      html:not(.dark) .bg-red-100     { background-color: #f6d7d3; }
+      html:not(.dark) .bg-amber-50    { background-color: #f7ecc9; }
+
+      /* ---- text ----
+         This is the part that is easy to miss. Slate greys were chosen against
+         #ffffff; a tinted background is darker, so every marginal grey drops
+         below the 4.5:1 AA threshold. slate-500 goes from 4.6:1 on white to
+         about 3.9:1 on sage — a real regression, not a cosmetic one. These are
+         re-mixed toward the paper's hue and darkened until they pass. */
+      /* #6b7a6b measured 4.2:1 against the card surface — the card is lighter
+         than the page, so a grey that clears the page can still fail on a card.
+         The lighter of the two surfaces is the one to size against. */
+      html:not(.dark) .text-slate-400 { color: #5d6a5d; }
+      html:not(.dark) .text-slate-500 { color: #55634f; }
+      html:not(.dark) .text-slate-600 { color: #414d3d; }
+      html:not(.dark) .text-slate-700 { color: #333f33; }
+
+      /* Emerald text on paper needs the same treatment — Tailwind's emerald-600
+         is 3.3:1 on sage. */
+      html:not(.dark) .text-emerald-600 { color: #0f6b32; }
+      html:not(.dark) .text-emerald-700 { color: #0c5628; }
+
+      /* The dark header, the dark hero and the red flashcard back are all
+         explicit slate-900 / red-600 and are deliberately left alone — they
+         are the app's dark furniture and they still frame the paper well. */
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <!-- Absolute path, so it resolves the same whether the page is served as
+         /app or /app/ — a relative "./src/main.jsx" would break on one of them. -->
+    <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      // Scoped to /app/ so the service worker governs the app only. Registering
+      // it at the root would let it intercept navigations to the landing page,
+      // which is a plain static page and wants nothing to do with it.
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker
+            .register("/sw.js", { scope: "/app/" })
+            .catch(function () {
+              /* Install-to-home-screen won't be offered. Nothing else breaks. */
+            });
+        });
+      }
+    </script>
+  </body>
+</html>

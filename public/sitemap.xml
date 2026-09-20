@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One page, because there is one page worth indexing. /app is noindex.
+
+  Update <lastmod> when the content genuinely changes — fees, rules, dates.
+  Bumping it on every deploy teaches Google to ignore it.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://passdrivingtest.ie/</loc>
+    <lastmod>2026-09-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

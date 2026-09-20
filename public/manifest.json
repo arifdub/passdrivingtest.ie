@@ -1,0 +1,16 @@
+{
+  "name": "PassDrivingTest.ie",
+  "short_name": "PassDrivingTest",
+  "description": "Practice for the Irish Driver Theory Test — 40-question mock papers on a 45-minute timer, every official road sign, and progress tracking.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/maskable-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

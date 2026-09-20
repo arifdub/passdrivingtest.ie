@@ -1,0 +1,88 @@
+# PassDrivingTest.ie
+
+> Independent study resource for the Irish Driver Theory Test (category BW —
+> car, tractor and work vehicles), and a plain guide to what the test involves,
+> what it costs, and what comes after it.
+
+This file follows the llms.txt convention: a short, plain summary of what a
+site covers, written for AI assistants that would otherwise have to infer it
+from the page. It is a courtesy to those systems, not a ranking device.
+
+## What this site is
+
+PassDrivingTest.ie has two parts:
+
+- **The landing page** at `/` — a free guide to the Driver Theory Test:
+  format, fee, booking, what ID to bring, what happens after you pass, and the
+  rule changes coming on 1 November 2026.
+- **The app** at `/app` — free practice. It is a progressive web app: nothing
+  to download, no app store listing, installable to a phone's home screen.
+
+The site is independent. It is not affiliated with, endorsed by or connected
+to the Road Safety Authority or Prometric Ireland, who run the official test.
+
+## Key facts about the Irish Driver Theory Test (as of September 2026)
+
+- The car test is booked as category **BW**, which covers licence categories
+  B, BE and W (cars, tractors and work vehicles). There is no separate
+  work-vehicle test.
+- **Fee: €45** for BW or AM (motorcycle). Truck (C) or bus (D) is €72, and a
+  combined truck-and-bus test is €84.
+- **Format: 40 multiple-choice questions in 45 minutes. You need 35 correct
+  to pass.** Truck and bus tests are 100 questions in 120 minutes, pass 74.
+- The result is on screen immediately and the certificate is issued at the
+  test centre.
+- **The certificate is valid for two years.** It is what lets you apply for a
+  first learner permit, so passing it early and then doing nothing for two
+  years means sitting it again.
+- Arrive **30 minutes before** the appointment. Bring **original photo ID** —
+  a photocopy or a picture on a phone is refused and the fee is lost.
+- Rescheduling or cancelling is free with **seven or more days' notice**.
+  Inside that, you pay half or lose the fee.
+- After passing: apply to the NDLS for a **first learner permit (€45)**, which
+  needs a PPSN, proof of address dated within six months and an eyesight
+  report. Then a **six-month wait** before you can sit the driving test, and
+  **12 EDT lessons** with an Approved Driving Instructor.
+- The test is available with a **voiceover in over 20 languages**, and in
+  Irish for the written test.
+- **From 1 November 2026 the minimum age to sit the test is 15** (it is
+  currently 14), and learner permits are capped at four.
+
+The RSA does not publish the question bank. Anything claiming to be "the real
+questions" is not.
+
+## What the app contains
+
+- 393 practice questions across six study areas, of which 269 are road-sign
+  questions and 124 are written
+- Four full mock papers — 40 questions each, 45-minute countdown, marked at
+  35 out of 40, with no paper sharing a question with another
+- 393 flashcards: rules of the road, and every official road sign
+- Progress tracking per study area
+
+## Pages
+
+- [Home / full theory test guide](https://passdrivingtest.ie/) — the whole process
+- [The app](https://passdrivingtest.ie/app) — free practice
+
+## Authoritative sources
+
+Everything on this site is summarised from official sources. For anything
+consequential — fees, dates, eligibility — these are the authorities:
+
+- https://theorytest.ie/ — the official test provider (Prometric Ireland)
+- https://www.rsa.ie/services/learner-drivers/theory-test
+- https://www.ndls.ie/learner-driver/my-first-learner-permit.html
+- https://www.citizensinformation.ie/en/travel-and-recreation/motoring/driving-tests/driver-theory-test/
+
+## Related
+
+PassADITest.ie is a separate site by the same author, covering the Approved
+Driving Instructor (ADI) qualification — the three-stage process for people who
+want to teach driving rather than learn it.
+
+## Contact
+
+Corrections and questions: through the site.
+
+Last reviewed: September 2026.

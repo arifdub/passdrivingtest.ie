@@ -1,0 +1,1300 @@
+<!doctype html>
+<!-- lang is en-GB rather than en-IE for one practical reason: browsers ship
+     hyphenation dictionaries per locale, and there is no en-IE dictionary. A
+     browser asked to hyphenate en-IE finds nothing and silently gives up
+     rather than falling back to generic English — which is why justified text
+     opens large word gaps with no hyphens anywhere.
+
+     Irish English and British English share their orthography, so this is
+     accurate as well as useful, and it costs nothing in geo-targeting: the .ie
+     domain, og:locale=en_IE and the content itself carry that. -->
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<script>
+/* ===========================================================================
+   INSTALLED APP → STRAIGHT TO THE APP
+
+   A home-screen icon must open the app, never this page.
+
+   The manifest says start_url /app/, which handles an install made from /app.
+   But someone can add to home screen while reading THIS page, and iOS then
+   captures whatever URL is in the address bar — "/" — ignoring the manifest.
+   Their icon would open a marketing page with no way into their progress.
+
+   So the page checks how it was launched. display-mode: standalone is the
+   standard signal; navigator.standalone is Safari's older iOS-only one, and
+   iOS is precisely the case that needs it, so both are tested.
+
+   First thing in <head>, before the stylesheet, so it redirects before
+   anything paints rather than flashing the landing page on every launch.
+   replace() rather than assign() so Back doesn't bounce them straight here
+   again.
+
+   A normal browser visit fails both tests and reads on untouched.
+   =========================================================================== */
+(function () {
+  try {
+    var installed =
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+      window.navigator.standalone === true;
+
+    // ?stay=1 is the escape hatch: it lets the app's own logo link open this
+    // page deliberately without being bounced back.
+    var deliberate = location.search.indexOf("stay=1") !== -1;
+
+    if (installed && !deliberate) location.replace("/app/");
+  } catch (e) {
+    /* Old browser, or matchMedia blocked. Showing the landing page is the
+       right thing to fall back to — it has a Go to the app button. */
+  }
+})();
+</script>
+
+<!-- ===========================================================================
+     PassDrivingTest.ie — landing page
+
+     This is the page search engines see. The app lives at /app and is marked
+     noindex, because a screen behind a login has nothing to rank and would only
+     compete with this page for the same searches.
+
+     Written as one self-contained file with no build step, no framework and no
+     blocking JavaScript. Someone finding this from a Google result on 4G
+     should have it readable before they notice it loading.
+
+     ON THE FIGURES IN THIS PAGE
+     Every fee, duration and rule was checked against theorytest.ie (the
+     official provider), rsa.ie, ndls.ie or citizensinformation.ie in September
+     2026. Where an authoritative source does not state something — a lateness
+     grace period, how much extra time an accommodation grants — this page does
+     not state it either. Filling those gaps with a plausible-sounding number is
+     how a study site ends up costing somebody their test fee.
+     =========================================================================== -->
+
+<!-- Title and description are sized to fit Google's result snippet rather than
+     to say everything. Keywords at the front. -->
+<title>Irish Driver Theory Test 2026 — Format, Fees &amp; Free Practice</title>
+<meta name="description" content="The Driver Theory Test explained: 40 questions in 45 minutes, 35 to pass, €45. Booking, ID rules, what happens after you pass — plus free practice questions and mock tests.">
+<link rel="canonical" href="https://passdrivingtest.ie/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="PassDrivingTest.ie">
+<meta property="og:title" content="Irish Driver Theory Test — Format, Fees and Free Practice">
+<meta property="og:description" content="40 questions in 45 minutes, 35 to pass, €45. Booking, ID rules, and what happens after you pass — plus free practice and mock tests.">
+<meta property="og:url" content="https://passdrivingtest.ie/">
+<meta property="og:image" content="https://passdrivingtest.ie/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="en_IE">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- ---------------------------------------------------------------------------
+     SITE ICON
+
+     Google's rules for the favicon beside a search result are stricter than a
+     browser's: the file must be a SQUARE whose side is a MULTIPLE OF 48. Every
+     size below is 48, 96 or 192. A 64x64 icon — an entirely ordinary favicon
+     size that every browser accepts — is skipped, and you get the grey globe.
+
+     favicon.ico is listed first and also sits at the site root, because that is
+     the path Google and older browsers try by convention whether or not a link
+     tag exists. Keeping both means neither route comes up empty.
+     --------------------------------------------------------------------------- -->
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<!-- Deliberately no manifest link on this page. The manifest's scope is /app/,
+     so linking it from / would do nothing for installs but would give Chrome a
+     second, conflicting icon source for this page. The app page links it. -->
+<meta name="theme-color" content="#0f172a">
+
+<style>
+/* --------------------------------------------------------------------------
+   Everything inline. One request for the HTML, one for the mark, and the page
+   is up — no stylesheet round-trip, no font download blocking the first paint.
+   The system font stack is what the reader's own OS already has loaded.
+   -------------------------------------------------------------------------- */
+:root{
+  /* ---- paper, not screen ----
+
+     Not pure white. On a phone at night #ffffff is the brightest thing in the
+     room, and on a page this long that is a lot of sustained glare — the reason
+     e-readers offer tinted paper modes at all.
+
+     A cool blue-grey here rather than the sister site's sage, so the two read
+     as different places at a glance. The tint is carried in all three channels
+     (232/238/246 is 14 points of spread) so the eye reads "off-white with a
+     cool cast" rather than "blue page".
+
+     Three surfaces, each a step apart so the layering still reads:
+       --bg    the page
+       --bg-2  alternating sections, a shade deeper
+       --card  cards and panels, a shade lighter so they lift off the page
+
+     Borders are tinted to match. A neutral grey border on a tinted ground reads
+     as dirty, which is the usual giveaway that a palette was half-changed. */
+  --ink:#0f172a; --ink-2:#1e293b; --body:#32405a; --muted:#5a6884;
+  --line:#ccd8e8; --bg:#e8eef6; --bg-2:#dfe7f2; --card:#f2f6fb;
+  /* Two blues, and both were picked by measuring contrast on THIS background
+     rather than on white. Changing a page's background is exactly when every
+     marginal foreground colour becomes a failure.
+       --blue   button fill, white text on it
+       --blue-d link and label text on the tinted ground */
+  --blue:#1d4ed8; --blue-d:#1a46c0; --blue-l:#d8e3fb;
+  --amber:#8a4b06; --amber-l:#f7ecc9;
+  --wrap:1060px; --read:720px;
+
+  /* One number controls the rhythm of the whole page. 40 on a phone, more on a
+     desktop where the text column is narrower relative to the window and the
+     page needs the breathing room to not look cramped. */
+  --sp:40px;
+}
+@media(min-width:760px){ :root{ --sp:56px } }
+*{box-sizing:border-box}
+/* The reveal animations start blocks 26px off to one side. Without this that
+   offset is real page width, so a phone gets a horizontal scrollbar and can be
+   dragged sideways before anything has animated in.
+
+   overflow-x:clip rather than hidden — hidden on <html> or <body> makes the
+   element a scroll container, which silently breaks position:sticky on the
+   header. clip suppresses the overflow without that side effect, and the
+   hidden fallback underneath covers browsers that don't support it. */
+html{-webkit-text-size-adjust:100%; scroll-behavior:smooth; overflow-x:hidden; color-scheme:light}
+@supports (overflow:clip){ html{overflow-x:clip} }
+body{
+  margin:0; background:var(--bg); color:var(--body);
+  font:17px/1.58 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{color:var(--ink); line-height:1.2; margin:0 0 .4em; letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5.2vw,3.1rem); font-weight:800; letter-spacing:-.03em}
+h2{font-size:clamp(1.45rem,3.4vw,2rem); font-weight:800; margin-top:0}
+h3{font-size:1.15rem; font-weight:700}
+h4{font-size:1rem; font-weight:700}
+
+/* ---------------------------------------------------------------------------
+   JUSTIFICATION — off on phones, on above 640px
+
+   Justified text works by stretching the spaces between words until the line
+   reaches both margins. How ugly that looks depends entirely on how many
+   spaces there are to share the slack between.
+
+     phone   ~350px column = about 42 characters = 6 or 7 words per line
+     tablet+  720px column = about 78 characters = 13 or 14 words per line
+
+   With 6 gaps to absorb a whole word's worth of slack, each gap can double.
+   That is the "too much space between the words" effect — not a browser bug
+   and not fixable with any CSS property, because there is no way to cap how
+   far a space may stretch. Typographers put the floor for justified text at
+   around 60 characters for exactly this reason.
+
+   TO FORCE IT ON PHONES ANYWAY: delete the @media line so the rules apply at
+   every width.
+   --------------------------------------------------------------------------- */
+p{margin:0 0 .9em; hyphens:auto; -webkit-hyphens:auto; text-wrap:pretty}
+a{color:var(--blue-d)}
+ul,ol{margin:0 0 .9em; padding-left:1.3em}
+li{margin-bottom:.4em; hyphens:auto; -webkit-hyphens:auto}
+
+@media(min-width:640px){
+  p,li,.lede{text-align:justify}
+  /* Never break a word with fewer than 6 characters, and never leave fewer
+     than 3 on either side of the break. Without this the browser will happily
+     produce "a-nd" at a line end, which looks worse than the gap it fixed. */
+  p,li,.lede{hyphenate-limit-chars:6 3 3; -webkit-hyphenate-limit-chars:6 3 3}
+}
+
+/* Short strings have nothing to justify and come out looking gappy. */
+.hero small,caption,.fine p,figcaption,.facts span,td,th{text-align:left; hyphens:manual}
+.hero .lede{text-align:left !important; hyphens:manual}
+strong{color:var(--ink); font-weight:650}
+img{max-width:100%; height:auto}
+
+.wrap{max-width:var(--wrap); margin:0 auto; padding:0 20px}
+.read{max-width:var(--read)}
+section{padding:var(--sp) 0; border-top:1px solid var(--line)}
+section.alt{background:var(--bg-2)}
+/* The header sticks and is 62px tall, so an anchor jump lands with the heading
+   hidden underneath it. scroll-margin pushes the landing point down past it —
+   plus the notch inset, because on an iPhone the header is that much taller. */
+[id]{scroll-margin-top:calc(78px + env(safe-area-inset-top))}
+.lede{font-size:1.08rem; line-height:1.5; color:var(--body)}
+
+/* ---- header ---- */
+header{
+  position:sticky; top:0; z-index:50; background:rgba(15,23,42,.97);
+  backdrop-filter:saturate(180%) blur(10px); border-bottom:1px solid #1e293b;
+  /* viewport-fit=cover lets the dark header run edge to edge behind the status
+     bar. The cost is that its contents sit under the Dynamic Island unless
+     pushed clear. env(safe-area-inset-top) is 0 on desktop and Android. */
+  padding-top:env(safe-area-inset-top);
+}
+.bar{display:flex; align-items:center; gap:14px; height:62px}
+/* The wheel alone, with the name in live text beside it. A wordmark baked into
+   an image becomes an unreadable smudge at 33px; text stays crisp at any size,
+   on any screen, and weighs nothing. */
+.brand{display:flex; align-items:center; gap:9px; text-decoration:none; padding:8px 0}
+.brand img{height:33px; width:33px; display:block}
+.brand span{color:#fff; font-weight:800; font-size:1.05rem; letter-spacing:-.02em; white-space:nowrap}
+.brand span i{font-style:normal; color:#60a5fa}
+@media(max-width:420px){ .brand span{font-size:.95rem} }
+nav.links{margin-left:auto; display:flex; align-items:center; gap:22px}
+nav.links a{color:#cbd5e1; text-decoration:none; font-size:.92rem; font-weight:600}
+nav.links a:hover{color:#fff}
+@media(max-width:900px){nav.links a.hide-sm{display:none}}
+
+.btn{
+  display:inline-block; background:var(--blue); color:#fff; text-decoration:none;
+  font-weight:700; padding:11px 20px; border-radius:10px; border:1px solid var(--blue);
+  font-size:.95rem; white-space:nowrap; transition:background .15s;
+}
+.btn:hover{background:var(--blue-d); border-color:var(--blue-d)}
+.btn.lg{padding:15px 30px; font-size:1.05rem; border-radius:12px}
+.btn.ghost{background:transparent; color:var(--ink); border-color:var(--line)}
+.btn.ghost:hover{background:var(--bg-2); border-color:#b8c8de}
+.btn.on-dark{background:#fff; color:var(--ink); border-color:#fff}
+.btn.on-dark:hover{background:#e2e8f0; border-color:#e2e8f0}
+
+/* ---- hero ---- */
+.hero{background:var(--ink); color:#cbd5e1; padding:var(--sp) 0; border:0}
+.hero h1{color:#fff}
+.hero .lede{color:#cbd5e1; font-size:1.1rem; line-height:1.5; max-width:620px}
+.cta-row{display:flex; flex-wrap:wrap; gap:10px; margin-top:20px}
+.hero small{display:block; margin-top:12px; color:#94a3b8; font-size:.88rem}
+/* Three across, always — a fixed grid rather than auto-fit, which wrapped them
+   into 2x2 on a phone and read as a table of facts rather than a strip of
+   headline numbers. */
+.facts{
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:1px; background:#1e293b; border:1px solid #1e293b; border-radius:14px;
+  overflow:hidden; margin-top:20px;
+}
+.facts div{background:var(--ink-2); padding:13px 11px}
+.facts b{display:block; color:#fff; font-size:1.3rem; font-weight:800; letter-spacing:-.02em}
+.facts span{display:block; color:#94a3b8; font-size:.68rem; font-weight:600;
+  text-transform:uppercase; letter-spacing:.04em; margin-top:4px; line-height:1.3}
+.facts span .ic{color:#60a5fa; width:.9em; height:.9em; margin-right:.25em; vertical-align:-.1em}
+@media(min-width:620px){
+  .facts div{padding:16px 18px}
+  .facts b{font-size:1.5rem}
+  .facts span{font-size:.76rem; letter-spacing:.06em}
+}
+
+/* ---- steps ---- */
+ol.steps{list-style:none; padding:0; margin:22px 0 0; counter-reset:s}
+ol.steps>li{
+  counter-increment:s; position:relative; padding:0 0 20px 50px;
+  border-left:2px solid var(--line); margin-left:15px;
+}
+ol.steps>li:last-child{border-left-color:transparent; padding-bottom:0}
+ol.steps>li::before{
+  content:counter(s); position:absolute; left:-16px; top:-2px;
+  width:31px; height:31px; border-radius:50%; background:var(--ink); color:#fff;
+  font-weight:800; font-size:.86rem; display:flex; align-items:center; justify-content:center;
+}
+ol.steps>li.key::before{background:var(--blue)}
+ol.steps h3{margin-bottom:.3em}
+ol.steps p{margin-bottom:.45em}
+ol.steps>li>p:last-child{margin-bottom:0}
+ol.steps .tag{
+  display:inline-block; background:var(--blue-l); color:var(--blue-d);
+  font-size:.74rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+  padding:3px 9px; border-radius:20px; margin-left:8px; vertical-align:2px;
+}
+
+/* ---- cards ---- */
+.grid{display:grid; gap:12px; margin-top:20px}
+.grid.c2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.grid.c3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px}
+.card h3{margin-top:0; margin-bottom:.35em}
+.card p:last-child,.card ul:last-child{margin-bottom:0}
+.card .num{
+  font-size:.72rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
+  color:var(--blue-d); margin-bottom:5px; display:block;
+}
+
+/* ---- table ---- */
+.tablewrap{overflow-x:auto; margin:18px 0 0; -webkit-overflow-scrolling:touch}
+table{width:100%; border-collapse:collapse; font-size:.95rem; min-width:460px}
+caption{text-align:left; color:var(--muted); font-size:.86rem; padding-bottom:8px}
+th,td{text-align:left; padding:10px 13px; border-bottom:1px solid var(--line)}
+th{background:var(--bg-2); color:var(--ink); font-weight:700; font-size:.82rem;
+  text-transform:uppercase; letter-spacing:.04em}
+td.n{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:650; color:var(--ink)}
+tr.you td{background:var(--blue-l)}
+tr.total td{border-top:2px solid var(--ink); border-bottom:0; font-weight:800; color:var(--ink)}
+
+/* ---- callout ---- */
+.note{
+  background:var(--amber-l); border:1px solid #e8d49a; border-left:4px solid #d08700;
+  border-radius:10px; padding:15px 17px; margin:18px 0;
+}
+.note p:last-child{margin-bottom:0}
+.note strong{color:var(--amber)}
+
+/* ---- faq ---- */
+details{border-bottom:1px solid var(--line); padding:4px 0}
+details summary{
+  cursor:pointer; padding:14px 34px 14px 0; font-weight:650; color:var(--ink);
+  list-style:none; position:relative; font-size:1rem;
+}
+details summary::-webkit-details-marker{display:none}
+details summary::after{
+  content:"+"; position:absolute; right:6px; top:11px; font-size:1.5rem;
+  font-weight:400; color:var(--muted); line-height:1;
+}
+details[open] summary::after{content:"\2212"}
+details .a{padding:0 0 15px; color:var(--body)}
+details .a p:last-child,details .a ul:last-child{margin-bottom:0}
+
+/* ---- app promo ---- */
+.promo{background:var(--ink); color:#cbd5e1; border:0}
+.promo h2{color:#fff}
+.promo .lede{color:#cbd5e1}
+/* `strong` is globally the dark ink colour, which is invisible on the dark
+   sections. Any emphasis inside a dark block has to be re-coloured. */
+.promo strong,.hero strong,footer strong,.pwa strong{color:#fff}
+.promo ul:not(.feat){list-style:none; padding:0; margin:18px 0 0}
+.promo ul:not(.feat) li{padding-left:28px; position:relative; margin-bottom:9px; color:#cbd5e1}
+.promo ul:not(.feat) li::before{
+  content:"\2713"; position:absolute; left:0; top:-1px; color:#60a5fa; font-weight:800; font-size:1.1rem;
+}
+
+/* ---- footer ---- */
+footer{background:var(--ink); color:#94a3b8; padding:32px 0 26px; font-size:.88rem; border:0}
+footer .brand{padding:0}
+footer .brand img{height:30px; width:30px}
+footer .brand span{font-size:1rem}
+footer a{color:#cbd5e1; text-decoration:none}
+footer a:hover{color:#fff; text-decoration:underline}
+.fcols{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:18px 20px; margin-bottom:24px}
+.fcols h4{color:#fff; font-size:.75rem; text-transform:uppercase; letter-spacing:.07em; margin-bottom:6px}
+.fcols ul{list-style:none; padding:0; margin:0}
+/* Footer links are tap targets, not prose. Bare 16px rows sit close enough
+   together to hit the wrong one, so each link gets padding. */
+.fcols li{margin-bottom:0}
+.fcols li a{display:block; padding:9px 0}
+.fine{border-top:1px solid var(--ink-2); padding-top:18px; line-height:1.55; font-size:.82rem}
+.fine p{margin-bottom:.7em}
+
+/* ---- sticky mobile CTA ----
+   Hidden until the hero's own button has scrolled away. Two identical buttons
+   an inch apart looks like a mistake, and this bar's whole job is to be there
+   when the hero's isn't. */
+.sticky{display:none}
+@media(max-width:700px){
+  .sticky{
+    display:block; position:fixed; left:0; right:0; bottom:0; z-index:60;
+    background:rgba(255,255,255,.97); backdrop-filter:blur(8px);
+    border-top:1px solid var(--line); padding:10px 16px;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom));
+    transform:translateY(110%); transition:transform .22s ease;
+  }
+  .sticky.show{transform:translateY(0)}
+  .sticky .btn{display:block; text-align:center}
+  body{padding-bottom:78px}
+}
+@media(prefers-reduced-motion:reduce){.sticky{transition:none}}
+
+/* ---- icons ----
+   Inline SVG from one hidden <symbol> sheet. One copy of each path in the
+   document, referenced by <use> wherever it appears — no icon font to
+   download, no extra requests, and they inherit the surrounding text colour. */
+.ic{width:1em; height:1em; flex:0 0 auto; fill:none; stroke:currentColor;
+    stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-.125em}
+.ic-lg{width:1.35em; height:1.35em}
+h2 .ic{color:var(--blue-d); margin-right:.4em; vertical-align:-.08em}
+.promo h2 .ic{color:#60a5fa}
+.card .num .ic{width:.95em; height:.95em; margin-right:.35em; vertical-align:-.1em}
+ol.steps h3 .ic{color:var(--blue-d); margin-right:.35em; width:1em; height:1em}
+.note strong .ic{margin-right:.3em}
+
+/* ---- reveal on scroll ----
+   Blocks start slightly offset and settle as they come into view. Applied by
+   script, so with JavaScript off nothing is hidden — the page renders exactly
+   as it does now. That matters: a reveal built in CSS alone leaves the whole
+   page invisible to anything that does not run the observer, crawlers
+   included. */
+.rv{opacity:0; transform:translateY(14px); transition:opacity .55s ease, transform .55s ease}
+.rv.in{opacity:1; transform:none}
+/* Sideways entrances only where there is room. On a phone the grids collapse to
+   one column, so alternating sides looks arbitrary — and a 26px offset on a
+   350px card in a 390px viewport is real horizontal overflow. */
+@media(min-width:700px){
+  .rv-l{transform:translateX(-26px)}
+  .rv-r{transform:translateX(26px)}
+}
+.rv-d1{transition-delay:.08s} .rv-d2{transition-delay:.16s} .rv-d3{transition-delay:.24s}
+.rv-d4{transition-delay:.32s} .rv-d5{transition-delay:.40s}
+@media(prefers-reduced-motion:reduce){
+  .rv,.rv-l,.rv-r{opacity:1; transform:none; transition:none}
+  html{scroll-behavior:auto}
+}
+
+/* ---- app stat counters ---- */
+.appstats{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:1px;
+  background:#1e293b; border:1px solid #1e293b; border-radius:14px;
+  overflow:hidden; margin:22px 0 4px;
+}
+.appstats div{background:var(--ink-2); padding:16px 10px; text-align:center}
+.appstats b{
+  display:block; color:#60a5fa; font-size:1.55rem; font-weight:800;
+  letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.1;
+}
+.appstats span{
+  display:block; color:#94a3b8; font-size:.68rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.05em; margin-top:5px; line-height:1.3;
+}
+@media(min-width:620px){
+  .appstats div{padding:20px 14px}
+  .appstats b{font-size:2rem}
+  .appstats span{font-size:.76rem}
+}
+
+/* ---- feature list in the promo ---- */
+.feat{list-style:none; padding:0; margin:22px 0 0}
+.feat li{
+  display:flex; gap:12px; align-items:flex-start; margin-bottom:14px;
+  color:#cbd5e1; text-align:left; hyphens:manual;
+}
+.feat li .ic{color:#60a5fa; margin-top:.2em; width:1.2em; height:1.2em}
+.feat li b{display:block; color:#fff; font-weight:700; margin-bottom:1px}
+.feat li span{display:block; font-size:.94rem; line-height:1.5}
+
+/* ---- PWA note ---- */
+.pwa{
+  margin-top:22px; border:1px solid #334155; border-radius:14px;
+  padding:16px 18px; background:rgba(255,255,255,.035);
+}
+.pwa h3{color:#fff; font-size:1rem; margin:0 0 6px; display:flex; align-items:center; gap:8px}
+.pwa h3 .ic{color:#60a5fa}
+.pwa p{margin:0; color:#94a3b8; font-size:.92rem; line-height:1.55; text-align:left; hyphens:manual}
+.pwa p+p{margin-top:7px}
+
+@media print{header,.sticky,.hero .cta-row{display:none}
+  .rv{opacity:1 !important; transform:none !important}}
+</style>
+</head>
+
+<body>
+
+<!-- One definition per icon, referenced by <use> throughout the page.
+     aria-hidden and display:none so it never renders or reaches a screen
+     reader; the icons are decorative and every one sits beside text that
+     already says what it means. -->
+<svg style="display:none" aria-hidden="true" focusable="false">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-euro" viewBox="0 0 24 24"><path d="M4 10h9M4 14h9"/><path d="M18 6.5A7 7 0 0 0 8 12a7 7 0 0 0 10 5.5"/></symbol>
+  <symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2A2.6 2.6 0 0 1 14.5 10c0 1.7-2.5 2.2-2.5 3.8"/><path d="M12 17.2v.2"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M5 17h14"/><path d="M4 17v-4.5L6 7h12l2 5.5V17"/><circle cx="7.5" cy="17" r="1.6"/><circle cx="16.5" cy="17" r="1.6"/></symbol>
+  <symbol id="i-steer" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v6M3.5 15l5.6-2M20.5 15l-5.6-2"/></symbol>
+  <symbol id="i-id" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M13 10h5M13 14h5M5.5 16c.7-1.3 1.8-2 3-2s2.3.7 3 2"/></symbol>
+  <symbol id="i-sign" viewBox="0 0 24 24"><path d="M12 2.5 21.5 12 12 21.5 2.5 12 12 2.5Z"/><path d="M12 8v4M12 15.5v.2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.5v.2"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M6 21V12M11 21V6M16 21v-7M21 21V9"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+  <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="14" rx="2"/><path d="M8 3h11a2 2 0 0 1 2 2v11"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-badge" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.7 5.6 3.7 9s-1.2 6.5-3.7 9c-2.5-2.5-3.7-5.6-3.7-9s1.2-6.5 3.7-9Z"/></symbol>
+  <symbol id="i-offline" viewBox="0 0 24 24"><path d="M5 12.5a7 7 0 0 1 11-5.6"/><path d="M19 11.5a7 7 0 0 1-11 5.6"/><path d="M12 8.5v4l2.5 1.5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+</svg>
+
+<header>
+  <div class="wrap bar">
+    <a href="/" class="brand" aria-label="PassDrivingTest.ie home">
+      <img src="/wheel-sm.png" alt="" width="108" height="108">
+      <span>Pass<i>Driving</i>Test<i>.ie</i></span>
+    </a>
+    <nav class="links">
+      <a href="#format" class="hide-sm">The test</a>
+      <a href="#booking" class="hide-sm">Booking</a>
+      <a href="#after" class="hide-sm">After you pass</a>
+      <a href="#faq" class="hide-sm">FAQ</a>
+      <a href="/app" class="btn">Go to the app</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ======================= HERO ======================= -->
+<section class="hero">
+  <div class="wrap">
+    <h1>The Irish Driver Theory Test, explained</h1>
+    <p class="lede">
+      Forty multiple-choice questions in forty-five minutes, and you need
+      thirty-five of them right. This page covers what the test actually
+      involves, what it costs, what to bring on the day, and what happens
+      after you pass — then you can practise for free.
+    </p>
+    <div class="cta-row">
+      <a href="/app" class="btn lg">Start practising free</a>
+      <a href="#format" class="btn lg ghost on-dark">Read the guide</a>
+    </div>
+    <small>No card needed. Practise in your browser or add it to your home screen.</small>
+
+    <div class="facts">
+      <div><b>40</b><span><svg class="ic"><use href="#i-question"/></svg>Questions</span></div>
+      <div><b>45 min</b><span><svg class="ic"><use href="#i-clock"/></svg>To answer them</span></div>
+      <div><b>€45</b><span><svg class="ic"><use href="#i-euro"/></svg>Test fee</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= WHAT IT IS ======================= -->
+<section id="format">
+  <div class="wrap read">
+    <h2><svg class="ic ic-lg"><use href="#i-question"/></svg>What the test is</h2>
+    <p>
+      The Driver Theory Test is the written exam you must pass before you can
+      apply for a first learner permit. It is run for the Road Safety Authority
+      by Prometric Ireland, and it is taken on a computer at a test centre —
+      not online from home.
+    </p>
+    <p>
+      For a car you book the test as <strong>category BW</strong>. That one test
+      covers licence categories B, BE and W, which means cars, car-and-trailer
+      and work vehicles including tractors. There is no separate work-vehicle
+      test, and <strong>the category cannot be changed at the test centre</strong>,
+      so it is worth getting right at the booking screen.
+    </p>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Format by test category. Figures from theorytest.ie.</caption>
+        <thead>
+          <tr><th>Test</th><th>Time</th><th class="n">Questions</th><th class="n">To pass</th></tr>
+        </thead>
+        <tbody>
+          <tr class="you">
+            <td><strong>BW</strong> — car, tractor, work vehicles</td>
+            <td>45 min</td><td class="n">40</td><td class="n">35</td>
+          </tr>
+          <tr><td><strong>AM</strong> — motorcycle, moped</td><td>45 min</td><td class="n">40</td><td class="n">35</td></tr>
+          <tr><td><strong>C</strong> — truck</td><td>120 min</td><td class="n">100</td><td class="n">74</td></tr>
+          <tr><td><strong>D</strong> — bus</td><td>120 min</td><td class="n">100</td><td class="n">74</td></tr>
+          <tr><td><strong>CD</strong> — truck and bus combined</td><td>180 min</td><td class="n">140</td><td class="n">104</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:1em">
+      Thirty-five out of forty is <strong>87.5%</strong>, which is a high bar —
+      you can afford five wrong answers in the whole paper. That is the single
+      most useful thing to know before you start revising, because it rules out
+      the strategy of being broadly familiar with everything and sure of
+      nothing.
+    </p>
+
+    <div class="note">
+      <p><strong><svg class="ic"><use href="#i-alert"/></svg>On "the real questions"</strong></p>
+      <p>
+        The RSA does not publish its question bank, and nobody else has a copy
+        of it. Any site or app claiming to give you the actual exam questions is
+        either guessing or lying. What practice can honestly do is make sure the
+        rules are in your head and that reading a question under time pressure
+        feels familiar.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= BOOKING ======================= -->
+<section class="alt" id="booking">
+  <div class="wrap read">
+    <h2><svg class="ic ic-lg"><use href="#i-calendar"/></svg>Booking, and the day itself</h2>
+    <p>
+      Booking is done at <a href="https://theorytest.ie/" rel="nofollow noopener" target="_blank">theorytest.ie</a>,
+      which is the official provider — online is fastest, but you can also book
+      by phone or by post. You need an Irish address, and you must book under
+      your full name <em>exactly</em> as it appears on the ID you will bring.
+    </p>
+
+    <ol class="steps rv-group">
+      <li class="key">
+        <h3><svg class="ic"><use href="#i-car"/></svg>Pick the right category</h3>
+        <p>
+          BW for a car. AM for a motorcycle or moped. C or D for truck or bus —
+          and those two require you to already hold a full category B licence.
+        </p>
+      </li>
+      <li>
+        <h3><svg class="ic"><use href="#i-euro"/></svg>Pay the fee<span class="tag">€45 for BW</span></h3>
+        <p>
+          Card, Revolut, cheque or postal order. Truck or bus is €72, and a
+          combined truck-and-bus test is €84.
+        </p>
+      </li>
+      <li class="key">
+        <h3><svg class="ic"><use href="#i-id"/></svg>Bring original photo ID</h3>
+        <p>
+          A hard copy. <strong>A photocopy or a picture on your phone is
+          refused, and you lose the fee.</strong> Accepted: Public Services Card
+          with photo, passport (valid or expired up to 12 months), Irish
+          Passport Card, an EU/EEA or Swiss national ID card, an Irish learner
+          permit or driving licence, an Irish Travel Document, or a current
+          Ukrainian driving licence.
+        </p>
+        <p>The name on it has to match the booking exactly.</p>
+      </li>
+      <li>
+        <h3><svg class="ic"><use href="#i-clock"/></svg>Arrive 30 minutes early</h3>
+        <p>
+          That is the published check-in time. Turning up late can cost you the
+          fee, so treat the appointment time as the deadline for being checked
+          in rather than for arriving.
+        </p>
+      </li>
+      <li>
+        <h3><svg class="ic"><use href="#i-check"/></svg>Sit it, and get the result there and then</h3>
+        <p>
+          It is marked automatically. Your result appears on screen when you
+          finish and your certificate is issued at the centre — there is no wait
+          for a letter.
+        </p>
+      </li>
+    </ol>
+
+    <div class="note">
+      <p><strong><svg class="ic"><use href="#i-alert"/></svg>Changing or cancelling</strong></p>
+      <p>
+        Free with <strong>seven or more days' notice</strong>. Rescheduling
+        three to six days out costs half the fee; cancelling in that window
+        refunds half. Inside two days, or on the day, there is no refund and no
+        reschedule. If something comes up, moving it early is much cheaper than
+        moving it late.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= AFTER ======================= -->
+<section id="after">
+  <div class="wrap read">
+    <h2><svg class="ic ic-lg"><use href="#i-badge"/></svg>After you pass</h2>
+    <p>
+      Passing the theory test is not a licence. It is the thing that lets you
+      apply for one, and it comes with a clock attached.
+    </p>
+
+    <ol class="steps rv-group">
+      <li class="key">
+        <h3><svg class="ic"><use href="#i-clock"/></svg>Your certificate lasts two years</h3>
+        <p>
+          You must use it to apply for a learner permit within two years of the
+          test date. Let it lapse and you sit the test again, and pay again.
+          Passing it very early, before you are ready to start lessons, is how
+          people end up doing it twice.
+        </p>
+      </li>
+      <li>
+        <h3><svg class="ic"><use href="#i-id"/></svg>Apply for a first learner permit<span class="tag">€45</span></h3>
+        <p>
+          Through the NDLS, online or at one of its centres. You will need proof
+          of your PPSN, proof of address dated within the last six months, and a
+          completed eyesight report dated within the last month. The permit
+          itself is valid two years.
+        </p>
+      </li>
+      <li>
+        <h3><svg class="ic"><use href="#i-calendar"/></svg>Wait six months</h3>
+        <p>
+          First-time permit holders for cars, motorcycles and work vehicles
+          cannot sit the driving test until six months after the permit was
+          issued. That wait runs in parallel with your lessons, so it is not
+          usually the thing that holds people up.
+        </p>
+      </li>
+      <li class="key">
+        <h3><svg class="ic"><use href="#i-steer"/></svg>Do your twelve EDT lessons</h3>
+        <p>
+          Essential Driver Training is twelve one-hour sessions with an Approved
+          Driving Instructor, logged as you go. It is mandatory for car
+          learners. Motorcyclists do Initial Basic Training instead — 16 hours
+          for AM and A1, 18 for A2 and A.
+        </p>
+      </li>
+      <li>
+        <h3><svg class="ic"><use href="#i-check"/></svg>Sit the driving test</h3>
+        <p>Pass it and you exchange the certificate of competency for a full licence.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ======================= COSTS ======================= -->
+<section class="alt" id="costs">
+  <div class="wrap read">
+    <h2><svg class="ic ic-lg"><use href="#i-euro"/></svg>What it costs</h2>
+    <p>
+      The official fees are fixed and public. Driving lessons are not — EDT
+      prices vary by instructor and by county, so the figure below is left out
+      rather than invented.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <caption>Official fees, September 2026.</caption>
+        <tbody>
+          <tr><td>Driver Theory Test (BW — car)</td><td class="n">€45</td></tr>
+          <tr><td>Driver Theory Test (AM — motorcycle)</td><td class="n">€45</td></tr>
+          <tr><td>Driver Theory Test (C or D — truck or bus)</td><td class="n">€72</td></tr>
+          <tr><td>Driver Theory Test (CD — combined)</td><td class="n">€84</td></tr>
+          <tr><td>First learner permit (NDLS)</td><td class="n">€45</td></tr>
+          <tr><td>12 EDT lessons</td><td class="n">varies</td></tr>
+          <tr class="total"><td>Theory test + first permit</td><td class="n">€90</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1em">
+      A failed theory test means booking and paying for another one. There is no
+      limit on attempts, and the provider advises waiting at least three full
+      business days before re-sitting.
+    </p>
+  </div>
+</section>
+
+<!-- ======================= CHANGES ======================= -->
+<section id="changes">
+  <div class="wrap read">
+    <h2><svg class="ic ic-lg"><use href="#i-alert"/></svg>Two rule changes on 1 November 2026</h2>
+    <p>Both are close enough to matter if you are planning around them.</p>
+    <div class="grid c2 rv-group">
+      <div class="card">
+        <span class="num"><svg class="ic"><use href="#i-calendar"/></svg>From 1 Nov 2026</span>
+        <h3>Minimum age becomes 15</h3>
+        <p>
+          You can currently sit the theory test from age 14. From 1 November
+          2026 you must be at least 15 on the day of the appointment, and
+          anyone under 15 holding a booking on or after that date has to cancel
+          or move it.
+        </p>
+      </div>
+      <div class="card">
+        <span class="num"><svg class="ic"><use href="#i-id"/></svg>From 1 Nov 2026</span>
+        <h3>Learner permits capped at four</h3>
+        <p>
+          To renew a third or fourth permit you will need to have actually
+          <em>taken</em> a driving test in the previous two years — applying for
+          one is no longer enough. A permit that has been expired for two years
+          or more cannot be renewed, and restarting means sitting the theory
+          test again.
+        </p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:1.6em">Speed limits changed in February 2025</h3>
+    <p>
+      The default limit on rural local roads dropped from 80 km/h to 60 km/h.
+      The other defaults are unchanged: 50 built-up, 80 regional, 100 national
+      primary, 120 motorway.
+    </p>
+    <p>
+      The last documented revision of the theory test itself was July 2024 and
+      the current official revision material is the May 2024 edition — both
+      predate that change, and there is no published statement either way about
+      whether the question bank has caught up. Learn the 60 km/h rural default
+      regardless: it is the law on the road, which is where it counts.
+    </p>
+  </div>
+</section>
+
+<!-- ======================= ACCESSIBILITY ======================= -->
+<section class="alt" id="access">
+  <div class="wrap read">
+    <h2><svg class="ic ic-lg"><use href="#i-globe"/></svg>If English is not your first language, or you need support</h2>
+    <p>
+      The car test is available with a <strong>voiceover in over twenty
+      languages</strong>, chosen when you book. The written test can also be
+      taken in Irish for categories A, B, C and D, although there is no Irish
+      voiceover.
+    </p>
+    <p>
+      Other support is available and some of it has to be arranged ahead of
+      time. An automated reader and the self-service dyslexia support (voiceover
+      plus an on-screen lexicon) are at every centre and need no notice — you
+      just select them at booking. An in-person reader, in-person dyslexia
+      support or an Irish Sign Language interpreter must be arranged in advance,
+      and <strong>arranging one can take up to twenty business days</strong>, so
+      book early. Extra time, a separate room, a recorder and ear defenders are
+      all available on request.
+    </p>
+    <p>
+      Exactly how much extra time is granted is not published, so ask when you
+      arrange it rather than planning around a number you read somewhere.
+    </p>
+  </div>
+</section>
+
+<!-- ======================= APP ======================= -->
+<section class="promo" id="app">
+  <div class="wrap">
+    <div class="read">
+      <h2><svg class="ic ic-lg"><use href="#i-phone"/></svg>Practise for free</h2>
+      <p class="lede">
+        Study areas to work through, mock papers under exam conditions, and
+        flashcards for the signs. No card, no account needed to start.
+      </p>
+
+      <div class="appstats" id="appstats">
+        <div><b data-to="393">393</b><span>Practice questions</span></div>
+        <div><b data-to="240">240</b><span>Road signs</span></div>
+        <div><b data-to="4">4</b><span>Mock papers</span></div>
+      </div>
+
+      <ul class="feat">
+        <li>
+          <svg class="ic"><use href="#i-clock"/></svg>
+          <span><b>Mocks that match the real thing</b>
+          Forty questions, a forty-five minute countdown, marked out of forty
+          with thirty-five to pass. No paper shares a question with another.</span>
+        </li>
+        <li>
+          <svg class="ic"><use href="#i-sign"/></svg>
+          <span><b>Every official road sign</b>
+          Regulatory, warning, motorway, information and roadworks, as
+          flashcards and as questions. Signs are the largest single block of the
+          test and the easiest marks to bank.</span>
+        </li>
+        <li>
+          <svg class="ic"><use href="#i-chart"/></svg>
+          <span><b>Progress that shows the gaps</b>
+          Tracked per study area, so you can see which topic is costing you
+          marks instead of watching one overall percentage drift.</span>
+        </li>
+        <li>
+          <svg class="ic"><use href="#i-cards"/></svg>
+          <span><b>Flashcards for the rules</b>
+          Quick recall for the things that are pure memory — distances,
+          durations, who has priority.</span>
+        </li>
+      </ul>
+
+      <div class="pwa">
+        <h3><svg class="ic"><use href="#i-download"/></svg>No app store needed</h3>
+        <p>
+          This is a progressive web app. There is nothing to download and no
+          listing to find — open it in your browser, and if you want it on your
+          home screen, use <strong>Add to Home Screen</strong> from the share
+          menu. It then opens full screen like any other app.
+        </p>
+        <p>
+          Your progress follows your account, so a phone and a laptop stay in
+          step.
+        </p>
+      </div>
+
+      <div class="cta-row">
+        <a href="/app" class="btn lg on-dark">Open the app</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FAQ ======================= -->
+<section id="faq">
+  <div class="wrap read">
+    <h2><svg class="ic ic-lg"><use href="#i-book"/></svg>Common questions</h2>
+
+    <details>
+      <summary>How many questions do I need right to pass?</summary>
+      <div class="a"><p>
+        For the car test (BW) and the motorcycle test (AM): <strong>35 out of
+        40</strong>, in 45 minutes. For truck or bus, 74 out of 100 in 120
+        minutes. For the combined truck-and-bus test, 104 out of 140 in 180
+        minutes.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>How much does the Driver Theory Test cost?</summary>
+      <div class="a"><p>
+        €45 for the car test (BW) or the motorcycle test (AM). €72 for truck (C)
+        or bus (D). €84 for the combined truck-and-bus test.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>How long is the theory test certificate valid?</summary>
+      <div class="a"><p>
+        Two years from the date of the test. You have to use it to apply for a
+        learner permit inside that window — after it, you sit the test again.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>What ID do I need to bring?</summary>
+      <div class="a">
+        <p>Original photo ID, as a hard copy. A photocopy or a photo on your phone is refused. One of:</p>
+        <ul>
+          <li>Public Services Card with a photo</li>
+          <li>Passport — valid, or expired by no more than 12 months</li>
+          <li>Irish Passport Card — must be valid</li>
+          <li>EU, EEA or Swiss national identity card</li>
+          <li>Irish learner permit or driving licence</li>
+          <li>Irish Travel Document</li>
+          <li>Current Ukrainian driving licence</li>
+        </ul>
+        <p>The name must match your booking exactly. Wrong or missing ID means losing the fee.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Do I need a PPSN to sit the theory test?</summary>
+      <div class="a"><p>
+        Not to book or sit it — what you need is an Irish address and accepted
+        photo ID. A PPSN is required later, when you apply to the NDLS for your
+        learner permit.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>Can I take the test online at home?</summary>
+      <div class="a"><p>
+        No. It is taken on a computer at a test centre. Anything offering to let
+        you sit the official test from home is not the official test.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>What if I fail? How soon can I retake it?</summary>
+      <div class="a"><p>
+        There is no limit on attempts, and no waiting period imposed — though
+        the provider advises leaving at least three full business days. You book
+        and pay for a new test.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>How old do I have to be?</summary>
+      <div class="a"><p>
+        You can currently sit it from 14. <strong>From 1 November 2026 the
+        minimum age is 15</strong> on the day of the appointment, and bookings
+        held by under-15s for dates on or after then have to be cancelled or
+        moved.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>Can I change or cancel my appointment?</summary>
+      <div class="a"><p>
+        Free with seven or more days' notice. Three to six days out, a
+        reschedule costs half the fee and a cancellation refunds half. Inside
+        two days or on the day, neither is possible and the fee is lost.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>Is the test available in other languages?</summary>
+      <div class="a"><p>
+        Yes — the car test has a voiceover in over twenty languages, selected
+        when you book. The written test is also available in Irish for
+        categories A, B, C and D, though there is no Irish voiceover.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>What comes after I pass?</summary>
+      <div class="a"><p>
+        Apply to the NDLS for a first learner permit (€45), which needs your
+        PPSN, proof of address from the last six months and an eyesight report
+        from the last month. Then there is a six-month wait before you can sit
+        the driving test, and twelve EDT lessons with an Approved Driving
+        Instructor to complete.
+      </p></div>
+    </details>
+
+    <details>
+      <summary>Are these the real exam questions?</summary>
+      <div class="a"><p>
+        No, and nobody's are. The RSA does not publish its question bank. The
+        questions here are written to cover the same rules and signs the test
+        draws on, so that the material is familiar and the format is not a
+        surprise.
+      </p></div>
+    </details>
+  </div>
+</section>
+
+<!-- ======================= CLOSING ======================= -->
+<section class="alt">
+  <div class="wrap read" style="text-align:center">
+    <h2>Ready to start?</h2>
+    <p style="text-align:center">
+      Work through a study area, then sit a full mock under the clock and see
+      where you actually stand.
+    </p>
+    <div class="cta-row" style="justify-content:center">
+      <a href="/app" class="btn lg">Start practising free</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fcols">
+      <div>
+        <h4>This site</h4>
+        <ul>
+          <li><a href="#format">The test format</a></li>
+          <li><a href="#booking">Booking and ID</a></li>
+          <li><a href="#after">After you pass</a></li>
+          <li><a href="#costs">Costs</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Practice</h4>
+        <ul>
+          <li><a href="/app">Open the app</a></li>
+          <li><a href="/app">Mock tests</a></li>
+          <li><a href="/app">Road sign flashcards</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Official sources</h4>
+        <ul>
+          <li><a href="https://theorytest.ie/" rel="nofollow noopener" target="_blank">theorytest.ie</a></li>
+          <li><a href="https://www.rsa.ie/services/learner-drivers/theory-test" rel="nofollow noopener" target="_blank">RSA — theory test</a></li>
+          <li><a href="https://www.ndls.ie/" rel="nofollow noopener" target="_blank">NDLS — learner permit</a></li>
+          <li><a href="https://passaditest.ie/" rel="noopener" target="_blank">PassADITest.ie</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="fine">
+      <div class="brand" style="margin-bottom:12px">
+        <img src="/wheel-sm.png" alt="" width="108" height="108">
+        <span>Pass<i>Driving</i>Test<i>.ie</i></span>
+      </div>
+      <p>
+        <strong>Independent and unofficial.</strong> This site is not
+        affiliated with, endorsed by or connected to the Road Safety Authority,
+        Prometric Ireland or the NDLS. It is a study aid, not the test.
+      </p>
+      <p>
+        Fees, rules and dates were checked against official sources in September
+        2026 and can change. Before you spend money, confirm anything that
+        matters at <a href="https://theorytest.ie/" rel="nofollow noopener" target="_blank">theorytest.ie</a>.
+      </p>
+      <p>&copy; 2026 PassDrivingTest.ie</p>
+    </div>
+  </div>
+</footer>
+
+<div class="sticky" id="sticky">
+  <a href="/app" class="btn">Start practising free</a>
+</div>
+
+<script>
+/* Show the sticky button once the hero's button is off screen.
+
+   IntersectionObserver rather than a scroll listener — a scroll handler runs on
+   every frame of every scroll and is the usual reason a landing page feels
+   sticky on a cheap phone. This fires twice in a session.
+
+   If it doesn't run at all the bar simply stays hidden and every other route
+   into the app still works. Nothing on this page depends on JavaScript. */
+(function () {
+  var bar = document.getElementById("sticky");
+  var anchor = document.querySelector(".hero .cta-row");
+  if (!bar || !anchor || !("IntersectionObserver" in window)) return;
+  new IntersectionObserver(function (entries) {
+    bar.classList.toggle("show", !entries[0].isIntersecting);
+  }, { rootMargin: "0px 0px -20px 0px" }).observe(anchor);
+})();
+
+/* ===========================================================================
+   REVEAL ON SCROLL, AND THE COUNTERS
+
+   Both are progressive enhancement, and both fail safe.
+
+   The .rv class that hides an element is added BY THIS SCRIPT, not written
+   into the markup. So if the script never runs — JavaScript off, an old
+   browser, a crawler that doesn't execute it — nothing is ever hidden and the
+   page renders exactly as it would have without any of this. Building the
+   hidden state into the CSS is the common version of this effect and it means
+   a broken script leaves a blank page.
+
+   Same principle for the counters: the final figure is already in the HTML.
+   The script animates from zero up to it, and if it cannot, the correct number
+   was there all along.
+   =========================================================================== */
+(function () {
+  var reduce = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce || !("IntersectionObserver" in window)) return;
+
+  document.querySelectorAll(".rv-group").forEach(function (group) {
+    var kids = group.children;
+    for (var i = 0; i < kids.length; i++) {
+      kids[i].classList.add("rv");
+      /* Cards in a grid come in from alternating sides; steps in a list all
+         come from the left, which follows the reading eye. */
+      if (group.classList.contains("grid")) {
+        kids[i].classList.add(i % 2 ? "rv-r" : "rv-l");
+      } else {
+        kids[i].classList.add("rv-l");
+      }
+      if (i < 5) kids[i].classList.add("rv-d" + (i % 5 + 1));
+    }
+  });
+
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in");
+      io.unobserve(e.target);        // an entrance, not something that replays
+    });
+  }, { rootMargin: "0px 0px -10% 0px", threshold: 0.05 });
+
+  document.querySelectorAll(".rv").forEach(function (el) { io.observe(el); });
+
+  /* easeOutCubic so the number decelerates into its final value instead of
+     stopping dead. Roughly 1.1 seconds — long enough to register, short enough
+     not to hold up someone who is reading. */
+  function countUp(el) {
+    var target = parseInt(el.getAttribute("data-to"), 10);
+    if (!target) return;
+    var start = null, dur = 1100;
+    function frame(t) {
+      if (start === null) start = t;
+      var p = Math.min((t - start) / dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * eased).toLocaleString("en-IE");
+      if (p < 1) requestAnimationFrame(frame);
+    }
+    el.textContent = "0";
+    requestAnimationFrame(frame);
+  }
+
+  var stats = document.getElementById("appstats");
+  if (stats) {
+    var so = new IntersectionObserver(function (entries) {
+      if (!entries[0].isIntersecting) return;
+      stats.querySelectorAll("b[data-to]").forEach(countUp);
+      so.disconnect();
+    }, { threshold: 0.4 });
+    so.observe(stats);
+  }
+})();
+</script>
+
+<!-- ===========================================================================
+     STRUCTURED DATA
+
+     One @graph rather than several separate blocks, so the entities can
+     reference each other by id — that is what lets a search engine understand
+     that the WebApplication and the WebSite belong to the same publisher
+     rather than treating them as three unrelated things on one page.
+
+     Every FAQ answer below repeats what is visible in the FAQ section above,
+     word for word in substance. Google requires that; markup describing content
+     a visitor cannot see is grounds for a manual action, not a ranking boost.
+     =========================================================================== -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://passdrivingtest.ie/#org",
+      "name": "PassDrivingTest.ie",
+      "alternateName": ["PassDrivingTest", "Pass Driving Test", "Pass Driving Test Ireland"],
+      "url": "https://passdrivingtest.ie/",
+      "logo": "https://passdrivingtest.ie/icon-512.png",
+      "areaServed": { "@type": "Country", "name": "Ireland" },
+      "description": "Independent study resource for the Irish Driver Theory Test."
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://passdrivingtest.ie/#site",
+      "url": "https://passdrivingtest.ie/",
+      "name": "PassDrivingTest.ie",
+      "publisher": { "@id": "https://passdrivingtest.ie/#org" },
+      "inLanguage": "en-IE"
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://passdrivingtest.ie/#app",
+      "name": "PassDrivingTest.ie — Driver Theory Test practice",
+      "url": "https://passdrivingtest.ie/app",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Any — runs in a web browser, installable to a home screen",
+      "publisher": { "@id": "https://passdrivingtest.ie/#org" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+      "featureList": [
+        "393 practice questions across six study areas",
+        "Four full mock papers of 40 questions on a 45-minute countdown",
+        "Flashcards covering every official Irish road sign",
+        "Progress tracked per study area"
+      ]
+    },
+    {
+      "@type": "HowTo",
+      "@id": "https://passdrivingtest.ie/#howto",
+      "name": "How to pass the Irish Driver Theory Test and get a learner permit",
+      "description": "The steps from booking the theory test to holding a learner permit in Ireland.",
+      "totalTime": "P6M",
+      "estimatedCost": { "@type": "MonetaryAmount", "currency": "EUR", "value": "90" },
+      "step": [
+        { "@type": "HowToStep", "name": "Book the right category",
+          "text": "Book at theorytest.ie. Category BW covers cars, tractors and work vehicles; AM covers motorcycles and mopeds. The category cannot be changed at the test centre." },
+        { "@type": "HowToStep", "name": "Pay the fee",
+          "text": "EUR 45 for the BW or AM test. EUR 72 for truck or bus, EUR 84 for the combined test." },
+        { "@type": "HowToStep", "name": "Bring original photo ID",
+          "text": "A hard copy of an accepted photo ID, with the name matching the booking exactly. A photocopy or a phone picture is refused and the fee is lost." },
+        { "@type": "HowToStep", "name": "Arrive 30 minutes early",
+          "text": "Thirty minutes before the appointment time, for check-in." },
+        { "@type": "HowToStep", "name": "Sit the test",
+          "text": "Forty multiple-choice questions in forty-five minutes for the car test. Thirty-five correct answers are needed to pass. The result is given on screen and the certificate is issued at the centre." },
+        { "@type": "HowToStep", "name": "Apply for a learner permit",
+          "text": "Apply to the NDLS within two years of passing. The fee is EUR 45 and you need a PPSN, proof of address dated within six months and an eyesight report dated within one month." },
+        { "@type": "HowToStep", "name": "Wait six months and complete EDT",
+          "text": "First-time car permit holders wait six months before sitting the driving test, and complete twelve Essential Driver Training lessons with an Approved Driving Instructor." }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://passdrivingtest.ie/#faq",
+      "mainEntity": [
+        { "@type": "Question", "name": "How many questions do I need right to pass?",
+          "acceptedAnswer": { "@type": "Answer", "text": "For the car test (BW) and the motorcycle test (AM): 35 out of 40, in 45 minutes. For truck or bus, 74 out of 100 in 120 minutes. For the combined truck-and-bus test, 104 out of 140 in 180 minutes." } },
+        { "@type": "Question", "name": "How much does the Driver Theory Test cost?",
+          "acceptedAnswer": { "@type": "Answer", "text": "EUR 45 for the car test (BW) or the motorcycle test (AM). EUR 72 for truck (C) or bus (D). EUR 84 for the combined truck-and-bus test." } },
+        { "@type": "Question", "name": "How long is the theory test certificate valid?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Two years from the date of the test. You have to use it to apply for a learner permit inside that window; after it, you sit the test again." } },
+        { "@type": "Question", "name": "What ID do I need to bring?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Original photo ID as a hard copy — a photocopy or a photo on your phone is refused. Accepted: Public Services Card with a photo, a passport valid or expired by no more than 12 months, a valid Irish Passport Card, an EU, EEA or Swiss national identity card, an Irish learner permit or driving licence, an Irish Travel Document, or a current Ukrainian driving licence. The name must match your booking exactly." } },
+        { "@type": "Question", "name": "Do I need a PPSN to sit the theory test?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Not to book or sit it — what you need is an Irish address and accepted photo ID. A PPSN is required later, when you apply to the NDLS for your learner permit." } },
+        { "@type": "Question", "name": "Can I take the test online at home?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. It is taken on a computer at a test centre. Anything offering to let you sit the official test from home is not the official test." } },
+        { "@type": "Question", "name": "What if I fail? How soon can I retake it?",
+          "acceptedAnswer": { "@type": "Answer", "text": "There is no limit on attempts and no waiting period imposed, though the provider advises leaving at least three full business days. You book and pay for a new test." } },
+        { "@type": "Question", "name": "How old do I have to be?",
+          "acceptedAnswer": { "@type": "Answer", "text": "You can currently sit it from 14. From 1 November 2026 the minimum age is 15 on the day of the appointment, and bookings held by under-15s for dates on or after then have to be cancelled or moved." } },
+        { "@type": "Question", "name": "Can I change or cancel my appointment?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Free with seven or more days' notice. Three to six days out, a reschedule costs half the fee and a cancellation refunds half. Inside two days or on the day, neither is possible and the fee is lost." } },
+        { "@type": "Question", "name": "Is the test available in other languages?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes — the car test has a voiceover in over twenty languages, selected when you book. The written test is also available in Irish for categories A, B, C and D, though there is no Irish voiceover." } },
+        { "@type": "Question", "name": "What comes after I pass?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Apply to the NDLS for a first learner permit (EUR 45), which needs your PPSN, proof of address from the last six months and an eyesight report from the last month. Then there is a six-month wait before you can sit the driving test, and twelve EDT lessons with an Approved Driving Instructor to complete." } },
+        { "@type": "Question", "name": "Are these the real exam questions?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No, and nobody's are. The RSA does not publish its question bank. The questions here are written to cover the same rules and signs the test draws on, so that the material is familiar and the format is not a surprise." } }
+      ]
+    }
+  ]
+}
+</script>
+
+</body>
+</html>

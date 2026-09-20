@@ -1,0 +1,85 @@
+# PassDrivingTest.ie
+# ===========================================================================
+
+User-agent: *
+Allow: /
+
+Sitemap: https://passdrivingtest.ie/sitemap.xml
+
+
+# ---------------------------------------------------------------------------
+# AI assistants and answer engines
+#
+# The wildcard above already permits all of these. They are named anyway for
+# one reason that is not cosmetic: Google-Extended is an OPT-IN. Google treats
+# an absent rule for it conservatively, so spelling out the Allow is how this
+# page becomes eligible to appear in AI Overviews and Gemini answers rather
+# than only in the blue links.
+#
+# The rest are named so the intent is unambiguous, and so there is one place
+# to change your mind. To keep the content out of AI answers, change the
+# relevant Allow to Disallow here — nothing else needs touching.
+# ---------------------------------------------------------------------------
+
+# Google — AI Overviews and Gemini
+User-agent: Google-Extended
+Allow: /
+
+# OpenAI — ChatGPT browsing and search
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+# Anthropic — Claude
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+# Perplexity
+User-agent: PerplexityBot
+Allow: /
+
+# Microsoft Copilot / Bing AI
+User-agent: bingbot
+Allow: /
+
+# Apple Intelligence and Siri
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Meta AI
+User-agent: FacebookBot
+Allow: /
+
+# Common Crawl — feeds several open models
+User-agent: CCBot
+Allow: /
+
+
+# ---------------------------------------------------------------------------
+# A note on /app, because the obvious thing to do here is wrong.
+#
+# The app is behind a login and has nothing worth ranking, so it carries
+# <meta name="robots" content="noindex, follow"> in its own HTML.
+#
+# It is deliberately NOT disallowed here. Disallow and noindex cancel each
+# other out: a crawler blocked from fetching the page never sees the noindex,
+# and Google will still list a blocked URL when something links to it — which
+# the landing page does, several times. The result is the worst of both: a
+# bare URL in the results with no description under it.
+#
+# Allowing the crawl lets the noindex actually be read and obeyed.
+# ---------------------------------------------------------------------------

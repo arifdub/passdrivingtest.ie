@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Everything below is deliberately small. The app's look comes from Tailwind
+   utilities in the components; this file only handles the things a utility
+   class cannot reach.
+   --------------------------------------------------------------------------- */
+
+html {
+  /* Stops iOS inflating text in landscape, which breaks the quiz layout by
+     making the option buttons taller than the viewport. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Matches the shell's own background so the overscroll area above and below
+     the page is not a white band in dark mode. */
+  background: #f8fafc;
+}
+
+html.dark body {
+  background: #0f172a;
+}
+
+/* The quiz and the flashcard deck both use horizontal gestures. Without this,
+   a swipe near the left edge on iOS triggers the browser's own back gesture
+   and leaves the app mid-question. */
+.no-swipe-nav {
+  overscroll-behavior-x: contain;
+}
+
+/* Respect a system preference for less motion. The card flip and the screen
+   transitions are decoration; nobody needs them to use the app. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
