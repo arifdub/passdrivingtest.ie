@@ -46,7 +46,7 @@ export function Logo({ size = "md", className = "" }) {
       />
       <span
         className={`${words[size] || words.md} mt-2 font-extrabold tracking-tight
-                    text-slate-900 dark:text-white whitespace-nowrap`}
+                    text-white whitespace-nowrap`}
       >
         Pass<span className="text-blue-600 dark:text-blue-400">Driving</span>Test
         <span className="text-blue-600 dark:text-blue-400">.ie</span>
