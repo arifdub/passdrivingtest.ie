@@ -110,6 +110,10 @@
 <!-- Deliberately no manifest link on this page. The manifest's scope is /app/,
      so linking it from / would do nothing for installs but would give Chrome a
      second, conflicting icon source for this page. The app page links it. -->
+<!-- iOS ignores the manifest's short_name for "Add to Home Screen" and falls
+     back to <title> instead, which is the long SEO title above — so it needs
+     its own short name here, matching what app/index.html already sets. -->
+<meta name="apple-mobile-web-app-title" content="PassDrivingTest">
 <meta name="theme-color" content="#0f172a">
 
 <style>
