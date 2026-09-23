@@ -23,6 +23,7 @@ import {
 import { Logo } from "./ui";
 import { useAuth } from "./appAuth";
 import { TOTAL_QUESTIONS } from "./theorySections";
+import InstallPopup from "./InstallPopup";
 
 export default function AuthScreen() {
   const { signIn, signUp, resetPassword, continueAsGuest, mode } = useAuth();
@@ -150,6 +151,10 @@ export default function AuthScreen() {
               As a guest your progress saves on this device only. You can create
               an account later and keep everything you've done.
             </p>
+
+            <div className="mt-6 w-full">
+              <InstallPopup />
+            </div>
           </>
         ) : (
           <>
