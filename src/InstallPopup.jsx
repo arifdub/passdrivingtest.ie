@@ -98,7 +98,11 @@ export default function InstallPopup() {
   };
 
   return (
-    <div className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl relative">
+    <div
+      className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-5"
+      style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+    >
+    <div className="w-full max-w-sm bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-2xl relative">
       <button
         onClick={dismiss}
         aria-label="Dismiss"
@@ -141,6 +145,7 @@ export default function InstallPopup() {
           </p>
         </>
       )}
+    </div>
     </div>
   );
 }

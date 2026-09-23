@@ -152,9 +152,7 @@ export default function AuthScreen() {
               an account later and keep everything you've done.
             </p>
 
-            <div className="mt-6 w-full">
-              <InstallPopup />
-            </div>
+            <InstallPopup />
           </>
         ) : (
           <>
