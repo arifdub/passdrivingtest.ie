@@ -20,7 +20,7 @@ import {
   ClipboardCheck, ShieldCheck, GraduationCap, Wrench, Truck, Layers,
   TrendingUp, User, LogOut, Shield, ChevronRight, Trash2, Timer,
   Smartphone, Download, Share2, Check, Lock, Play, AlertTriangle, Target,
-  Sun, Moon, Type,
+  Sun, Moon, Type, MoreVertical, Menu,
 } from "lucide-react";
 import {
   ADI_SECTIONS, MOCKS, DECKS, PASS_MARK, PASS_QUESTIONS, MOCK_LENGTH, MOCK_MINUTES, lockedForGuest,
@@ -988,7 +988,7 @@ function InstallCard() {
     );
   }
 
-  if (state === "ios") {
+  if (state === "ios-safari") {
     return (
       <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
         <div className="flex items-center gap-3">
@@ -1007,10 +1007,59 @@ function InstallCard() {
             Tap <span className="font-semibold">Add</span> in the top right.
           </InstallStep>
         </ol>
+      </div>
+    );
+  }
+
+  if (state === "ios-other") {
+    return (
+      <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+        <div className="flex items-center gap-3">
+          <Smartphone size={18} className="text-emerald-500 shrink-0" />
+          <h2 className="font-bold text-slate-900 dark:text-white">Add to your Home Screen</h2>
+        </div>
+        <ol className="mt-4 space-y-3">
+          <InstallStep n="1">
+            Tap the <MoreVertical size={14} className="inline mx-0.5 -mt-0.5 text-blue-500" />
+            or <Share2 size={14} className="inline mx-0.5 -mt-0.5 text-blue-500" />
+            icon next to the address bar, top right.
+          </InstallStep>
+          <InstallStep n="2">
+            Tap <span className="font-semibold">Share</span>, then
+            <span className="font-semibold"> More</span> if it's not listed yet.
+          </InstallStep>
+          <InstallStep n="3">
+            Choose <span className="font-semibold">Add to Home Screen</span> and confirm.
+          </InstallStep>
+        </ol>
         <p className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-400 leading-relaxed">
-          This only works in Safari. If you're in another browser on iPhone,
-          open passdrivingtest.ie/app in Safari first.
+          iPhone browsers all use Apple's engine under the hood, so the menu
+          is in a different spot than Safari's but does the same thing.
         </p>
+      </div>
+    );
+  }
+
+  if (state === "android") {
+    return (
+      <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+        <div className="flex items-center gap-3">
+          <Smartphone size={18} className="text-emerald-500 shrink-0" />
+          <h2 className="font-bold text-slate-900 dark:text-white">Add to your Home Screen</h2>
+        </div>
+        <ol className="mt-4 space-y-3">
+          <InstallStep n="1">
+            Tap the <Menu size={14} className="inline mx-0.5 -mt-0.5 text-blue-500" />
+            menu, top right.
+          </InstallStep>
+          <InstallStep n="2">
+            Choose <span className="font-semibold">Add to Home screen</span> or
+            <span className="font-semibold"> Install app</span>.
+          </InstallStep>
+          <InstallStep n="3">
+            Confirm when your browser asks.
+          </InstallStep>
+        </ol>
       </div>
     );
   }
