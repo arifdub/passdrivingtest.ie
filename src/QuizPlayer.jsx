@@ -176,6 +176,25 @@ export default function QuizPlayer({ module, quiz, onExit }) {
     setStage("running");
   };
 
+  /* Credits answered questions to their section's coverage — "X of 34
+     covered" on Home and on the section screen. Shared by finish() and by
+     persist() below: without also crediting on pause/autosave, coverage
+     only ever updated once the whole attempt finished, so a paused attempt
+     with 5 of 34 answered still showed "0/34" everywhere else in the app
+     until it was completed. Idempotent (recordAnswered unions ids into a
+     Set), so credit already given by an earlier pause is a no-op here. */
+  const creditAnswered = useCallback((questions, answers) => {
+    const bySection = {};
+    questions.forEach((q, i) => {
+      const raw = answers[i];
+      if (raw === null || raw === undefined || !q.qid || !q.sectionId) return;
+      (bySection[q.sectionId] = bySection[q.sectionId] || []).push(q.qid);
+    });
+    for (const [sectionId, qids] of Object.entries(bySection)) {
+      recordAnswered(sectionId, qids);
+    }
+  }, [recordAnswered]);
+
   /* Shared by the explicit Pause button and the silent autosave below —
      both just persist the same shape. Returns the raw shape rather than
      relying on the store's `entries` to have updated yet: setEntries is
@@ -209,25 +228,6 @@ export default function QuizPlayer({ module, quiz, onExit }) {
   const handleAutosave = useCallback((state) => {
     persist(state);
   }, [persist]);
-
-  /* Credits answered questions to their section's coverage — "X of 34
-     covered" on Home and on the section screen. Shared by finish() and by
-     persist() below: without also crediting on pause/autosave, coverage
-     only ever updated once the whole attempt finished, so a paused attempt
-     with 5 of 34 answered still showed "0/34" everywhere else in the app
-     until it was completed. Idempotent (recordAnswered unions ids into a
-     Set), so credit already given by an earlier pause is a no-op here. */
-  const creditAnswered = useCallback((questions, answers) => {
-    const bySection = {};
-    questions.forEach((q, i) => {
-      const raw = answers[i];
-      if (raw === null || raw === undefined || !q.qid || !q.sectionId) return;
-      (bySection[q.sectionId] = bySection[q.sectionId] || []).push(q.qid);
-    });
-    for (const [sectionId, qids] of Object.entries(bySection)) {
-      recordAnswered(sectionId, qids);
-    }
-  }, [recordAnswered]);
 
   const finish = async ({ questions, answers, elapsed, timedOut }) => {
     const log = [];
