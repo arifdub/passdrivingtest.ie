@@ -56,10 +56,20 @@ function rebuildPaused(raw) {
   });
   if (!questions.length) return null;
 
+  /* Resume at the first unanswered question, not wherever the student
+     happened to be looking when they left. Without this, going back to
+     review an earlier question right before exiting would save that lower
+     index and "resume" somewhere behind their actual progress — reviewing
+     must not regress the saved position. All answered (finished the last
+     question but never tapped Finish) lands on the last question instead
+     of an out-of-range index. */
+  let resumeIndex = answers.findIndex(a => a === null || a === undefined);
+  if (resumeIndex === -1) resumeIndex = questions.length - 1;
+
   return {
     questions,
     answers,
-    index: Math.min(raw.index || 0, questions.length - 1),
+    index: resumeIndex,
     elapsed: raw.elapsed || 0,
     savedAt: raw.savedAt,
   };
@@ -166,7 +176,12 @@ export default function QuizPlayer({ module, quiz, onExit }) {
     setStage("running");
   };
 
-  const handlePause = (state) => {
+  /* Shared by the explicit Pause button and the silent autosave below —
+     both just persist the same shape. Returns the raw shape rather than
+     relying on the store's `entries` to have updated yet: setEntries is
+     async, so reading getPaused() back immediately after calling this would
+     still see last render's value. */
+  const persist = useCallback((state) => {
     const raw = {
       qids: state.questions.map(q => q.qid),
       answers: state.answers,
@@ -174,10 +189,23 @@ export default function QuizPlayer({ module, quiz, onExit }) {
       elapsed: state.elapsed,
     };
     savePausedAttempt(module.id, raw);
-    setPaused(rebuildPaused(raw));
+    return raw;
+  }, [module.id, savePausedAttempt]);
+
+  const handlePause = (state) => {
+    setPaused(rebuildPaused(persist(state)));
     setStage("intro");
     setSession(null);
   };
+
+  /* Runs on every answer and every navigation while the quiz is on screen —
+     not just when Pause is explicitly tapped. Without this, answering
+     questions 1-15 and then just closing the tab or hitting the top "Exit"
+     button (which never calls handlePause) lost everything, because the
+     attempt only ever lived in this component's React state. */
+  const handleAutosave = useCallback((state) => {
+    persist(state);
+  }, [persist]);
 
   const finish = async ({ questions, answers, elapsed, timedOut }) => {
     const log = [];
@@ -448,6 +476,7 @@ export default function QuizPlayer({ module, quiz, onExit }) {
         limitSeconds={limitSeconds}
         onFinish={finish}
         onPause={handlePause}
+        onAutosave={handleAutosave}
         onQuit={() => { setStage("intro"); setSession(null); }}
       />
     );
@@ -471,7 +500,7 @@ export default function QuizPlayer({ module, quiz, onExit }) {
 /* ===========================================================================
    RUNNING
    =========================================================================== */
-function QuizRun({ session, module, instantFeedback, limitSeconds, onFinish, onPause, onQuit }) {
+function QuizRun({ session, module, instantFeedback, limitSeconds, onFinish, onPause, onAutosave, onQuit }) {
   const { questions } = session;
   const total = questions.length;
   const timed = Number.isFinite(limitSeconds) && limitSeconds > 0;
@@ -536,6 +565,20 @@ function QuizRun({ session, module, instantFeedback, limitSeconds, onFinish, onP
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [timed, limitSeconds]);
+
+  /* Silently persists on every answer and every navigation — not just when
+     Pause is tapped. This is what makes a refresh, a killed tab, or just
+     tapping "Exit" resumable: by the time any of those happen, the last
+     interaction already wrote the attempt to the progress store (local
+     immediately, the account when signed in). Skips the first render so
+     resuming an attempt doesn't immediately rewrite itself with nothing
+     changed. */
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    onAutosave({ questions, answers, index, elapsed });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, index]);
 
   const q = questions[index];
   const picked = answers[index];
