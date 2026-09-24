@@ -189,8 +189,11 @@ export default function QuizPlayer({ module, quiz, onExit }) {
       elapsed: state.elapsed,
     };
     savePausedAttempt(module.id, raw);
+    // Coverage ("X of 34 covered" on Home and the section screen) should
+    // reflect an in-progress attempt too, not just a finished one.
+    creditAnswered(state.questions, state.answers);
     return raw;
-  }, [module.id, savePausedAttempt]);
+  }, [module.id, savePausedAttempt, creditAnswered]);
 
   const handlePause = (state) => {
     setPaused(rebuildPaused(persist(state)));
@@ -206,6 +209,25 @@ export default function QuizPlayer({ module, quiz, onExit }) {
   const handleAutosave = useCallback((state) => {
     persist(state);
   }, [persist]);
+
+  /* Credits answered questions to their section's coverage — "X of 34
+     covered" on Home and on the section screen. Shared by finish() and by
+     persist() below: without also crediting on pause/autosave, coverage
+     only ever updated once the whole attempt finished, so a paused attempt
+     with 5 of 34 answered still showed "0/34" everywhere else in the app
+     until it was completed. Idempotent (recordAnswered unions ids into a
+     Set), so credit already given by an earlier pause is a no-op here. */
+  const creditAnswered = useCallback((questions, answers) => {
+    const bySection = {};
+    questions.forEach((q, i) => {
+      const raw = answers[i];
+      if (raw === null || raw === undefined || !q.qid || !q.sectionId) return;
+      (bySection[q.sectionId] = bySection[q.sectionId] || []).push(q.qid);
+    });
+    for (const [sectionId, qids] of Object.entries(bySection)) {
+      recordAnswered(sectionId, qids);
+    }
+  }, [recordAnswered]);
 
   const finish = async ({ questions, answers, elapsed, timedOut }) => {
     const log = [];
@@ -238,16 +260,9 @@ export default function QuizPlayer({ module, quiz, onExit }) {
       });
     });
 
-    // Credit answered questions to the section they belong to. Skipped ones
-    // were never seen, so they don't count toward coverage.
-    const bySection = {};
-    for (const item of log) {
-      if (!item.qid || !item.sectionId || item.skipped) continue;
-      (bySection[item.sectionId] = bySection[item.sectionId] || []).push(item.qid);
-    }
-    for (const [sectionId, qids] of Object.entries(bySection)) {
-      await recordAnswered(sectionId, qids);
-    }
+    // Skipped ones were never seen, so they don't count toward coverage —
+    // creditAnswered already excludes them by checking the raw answer.
+    creditAnswered(questions, answers);
 
     if (isMock) {
       /* One verdict: 35 of 40. The rows gradeMock returns are a breakdown of
