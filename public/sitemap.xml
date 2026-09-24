@@ -4,12 +4,27 @@
 
   Update <lastmod> when the content genuinely changes — fees, rules, dates.
   Bumping it on every deploy teaches Google to ignore it.
+
+  The image:image entries use the Google Image sitemap extension so the
+  brand mark and social card are attributed to this URL for Google Images,
+  rather than relying on Google finding and guessing at them on its own.
+  wheel-sm.png is deliberately left out — it's decorative (empty alt in the
+  HTML) and not something worth surfacing as a standalone image result.
 -->
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://passdrivingtest.ie/</loc>
     <lastmod>2026-09-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://passdrivingtest.ie/og-card.png</image:loc>
+      <image:title>PassDrivingTest.ie — Driver Theory Test practice</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://passdrivingtest.ie/logo.png</image:loc>
+      <image:title>PassDrivingTest.ie logo</image:title>
+    </image:image>
   </url>
 </urlset>
