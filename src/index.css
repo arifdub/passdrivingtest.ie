@@ -35,6 +35,21 @@ html.dark body {
   overscroll-behavior-x: contain;
 }
 
+/* The little burst shown when a practice-quiz answer is right. Particles fly
+   out from the centre point to wherever --tx/--ty say and fade; the badge
+   pops in and settles. Kept in plain CSS rather than a library — it's ten
+   spans and a circle, not worth the extra kilobytes. */
+@keyframes pdt-burst {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  65% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1); opacity: 0; }
+}
+@keyframes pdt-pop {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  45% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
 /* Respect a system preference for less motion. The card flip and the screen
    transitions are decoration; nobody needs them to use the app. */
 @media (prefers-reduced-motion: reduce) {

@@ -56,6 +56,13 @@ const emptyEntry = () => ({
      Deliberately just the last attempt rather than a full history — enough to
      be useful, small enough to sync in the same row. */
   lastSections: [],
+  /* A quiz or mock paused mid-attempt: { qids, answers, index, elapsed,
+     savedAt }. Rides along with everything else on this row so "continue
+     where you left off" survives signing in on another device or
+     reinstalling the app, not just a refresh on the same phone. Needs
+     sql/02-add-paused-state.sql to have been run — absent until then, same
+     as lastSections above. */
+  paused: null,
   updatedAt: null,
 });
 
@@ -81,6 +88,21 @@ function sanitise(entry) {
           && r.t > 0 && r.c >= 0 && r.c <= r.t)
         .slice(0, 10)
     : [];
+
+  /* Same story: comes back from storage and from the server, so it can be
+     malformed, stale, or from before this field existed. Anything that
+     isn't a usable paused attempt is dropped rather than shown as one. */
+  e.paused = (e.paused && typeof e.paused === "object"
+    && Array.isArray(e.paused.qids) && e.paused.qids.length
+    && Array.isArray(e.paused.answers))
+    ? {
+        qids: e.paused.qids,
+        answers: e.paused.answers,
+        index: Number.isFinite(e.paused.index) ? e.paused.index : 0,
+        elapsed: Number.isFinite(e.paused.elapsed) ? e.paused.elapsed : 0,
+        savedAt: e.paused.savedAt || null,
+      }
+    : null;
 
   return e;
 }
@@ -133,6 +155,11 @@ function mergeEntry(a, b) {
     lastSections: newer.lastSections?.length ? newer.lastSections
       : a.lastSections?.length ? a.lastSections
       : (b.lastSections?.length ? b.lastSections : []),
+    /* The newer side wins outright, same reasoning as lastSections — and
+       correctly so here even when that means null: pausing and finishing
+       both bump updatedAt, so "newer" already means "the last thing that
+       actually happened to this attempt", clearing included. */
+    paused: newer.paused ?? null,
     updatedAt: newer.updatedAt || null,
   };
 }
@@ -183,6 +210,10 @@ export function ProgressProvider({ children }) {
              column simply isn't there, so this reads as undefined and the
              sanitiser turns it into an empty list. */
           lastSections: row.last_sections || [],
+          /* Absent until sql/02-add-paused-state.sql has been run — reads as
+             undefined and the sanitiser turns it into null, same pattern as
+             lastSections above. */
+          paused: row.paused || null,
           updatedAt: row.updated_at,
         };
       }
@@ -224,6 +255,7 @@ export function ProgressProvider({ children }) {
             ...(entry.lastSections?.length
               ? { last_sections: entry.lastSections }
               : null),
+            ...(entry.paused ? { paused: entry.paused } : null),
           },
           { onConflict: "user_id,module_id" }
         );
@@ -381,6 +413,68 @@ export function ProgressProvider({ children }) {
       if (error) console.warn("Answered questions not synced:", error.message);
     }
   }, [isSignedIn, user?.id]);
+
+  /* -----------------------------------------------------------------------
+     PAUSED ATTEMPT
+
+     Which question a quiz or mock was paused on, what's been picked so far,
+     and the clock reading. Written on every pause and cleared on every
+     finish/discard, same as the rest of this store — local first, then the
+     database when signed in, so it survives a sign-in on another device or
+     the app being deleted and reinstalled on this one.
+     ----------------------------------------------------------------------- */
+  const savePausedAttempt = useCallback(async (moduleId, { qids, answers, index, elapsed }) => {
+    if (!moduleId || !qids?.length) return;
+
+    const paused = { qids, answers, index, elapsed, savedAt: new Date().toISOString() };
+    setEntries(prev => {
+      const before = prev[moduleId] || emptyEntry();
+      const next = {
+        ...prev,
+        [moduleId]: { ...before, paused, updatedAt: new Date().toISOString() },
+      };
+      writeLocal(next);
+      return next;
+    });
+
+    if (isSignedIn && HAS_SUPABASE && user?.id) {
+      const { error } = await supabase.from("progress").upsert(
+        { user_id: user.id, module_id: moduleId, paused },
+        { onConflict: "user_id,module_id" }
+      );
+      // Column doesn't exist yet on this project (sql/02-add-paused-state.sql
+      // not run) — the device still has it, resume just won't follow to
+      // another one until the migration runs.
+      if (error) console.warn("Paused attempt not synced:", error.message);
+    }
+  }, [isSignedIn, user?.id]);
+
+  const clearPausedAttempt = useCallback(async (moduleId) => {
+    if (!moduleId) return;
+
+    setEntries(prev => {
+      const before = prev[moduleId];
+      if (!before?.paused) return prev;
+      const next = {
+        ...prev,
+        [moduleId]: { ...before, paused: null, updatedAt: new Date().toISOString() },
+      };
+      writeLocal(next);
+      return next;
+    });
+
+    if (isSignedIn && HAS_SUPABASE && user?.id) {
+      const { error } = await supabase.from("progress").upsert(
+        { user_id: user.id, module_id: moduleId, paused: null },
+        { onConflict: "user_id,module_id" }
+      );
+      if (error) console.warn("Paused attempt not cleared remotely:", error.message);
+    }
+  }, [isSignedIn, user?.id]);
+
+  const getPaused = useCallback((moduleId) => {
+    return sanitise(entries[moduleId]).paused;
+  }, [entries]);
 
   /* ---- readers ---- */
   const getModule = useCallback((moduleId) => {
@@ -579,6 +673,9 @@ export function ProgressProvider({ children }) {
     recordResult,
     recordAnswered,
     toggleCardKnown,
+    savePausedAttempt,
+    clearPausedAttempt,
+    getPaused,
     resetModule,
     resetAll,
     getModule,
@@ -587,6 +684,7 @@ export function ProgressProvider({ children }) {
     weakest,
     mockReadiness,
   }), [entries, syncing, recordResult, recordAnswered, toggleCardKnown,
+       savePausedAttempt, clearPausedAttempt, getPaused,
        resetModule, resetAll, getModule, getSection, overall, weakest,
        mockReadiness]);
 

@@ -36,56 +36,33 @@ import { QUESTION_BY_QID } from "./theorySections";
 
 /* ---------------------------------------------------------------------------
    Paused attempts
+
+   The raw { qids, answers, index, elapsed, savedAt } lives in the progress
+   store now (see progressStore.jsx savePausedAttempt/clearPausedAttempt) so
+   it syncs to the account like everything else there. This just rebuilds
+   the actual question objects from ids — a question removed from the bank
+   since pausing is dropped, along with the answer that went with it.
    --------------------------------------------------------------------------- */
-const pauseKey = (moduleId) => `pdt-paused-${moduleId}`;
+function rebuildPaused(raw) {
+  if (!raw?.qids?.length) return null;
 
-function loadPaused(moduleId) {
-  try {
-    const raw = localStorage.getItem(pauseKey(moduleId));
-    if (!raw) return null;
-    const saved = JSON.parse(raw);
-    if (!saved?.qids?.length) return null;
+  const questions = [];
+  const answers = [];
+  raw.qids.forEach((qid, i) => {
+    const q = QUESTION_BY_QID[qid];
+    if (!q) return;
+    questions.push(q);
+    answers.push(raw.answers?.[i] ?? null);
+  });
+  if (!questions.length) return null;
 
-    // Rebuild from ids. A question removed from the bank since pausing is
-    // dropped, along with the answer that went with it.
-    const questions = [];
-    const answers = [];
-    saved.qids.forEach((qid, i) => {
-      const q = QUESTION_BY_QID[qid];
-      if (!q) return;
-      questions.push(q);
-      answers.push(saved.answers?.[i] ?? null);
-    });
-    if (!questions.length) return null;
-
-    return {
-      questions,
-      answers,
-      index: Math.min(saved.index || 0, questions.length - 1),
-      elapsed: saved.elapsed || 0,
-      savedAt: saved.savedAt,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function savePaused(moduleId, { questions, answers, index, elapsed }) {
-  try {
-    localStorage.setItem(pauseKey(moduleId), JSON.stringify({
-      qids: questions.map(q => q.qid),
-      answers,
-      index,
-      elapsed,
-      savedAt: new Date().toISOString(),
-    }));
-  } catch {
-    /* storage full or private mode — the attempt just won't be resumable */
-  }
-}
-
-function clearPaused(moduleId) {
-  try { localStorage.removeItem(pauseKey(moduleId)); } catch { /* ignore */ }
+  return {
+    questions,
+    answers,
+    index: Math.min(raw.index || 0, questions.length - 1),
+    elapsed: raw.elapsed || 0,
+    savedAt: raw.savedAt,
+  };
 }
 
 /* ---------------------------------------------------------------------------
@@ -145,10 +122,24 @@ export default function QuizPlayer({ module, quiz, onExit }) {
   const [stage, setStage] = useState("intro");
   const [session, setSession] = useState(null);
   const [result, setResult] = useState(null);
-  const [paused, setPaused] = useState(() => loadPaused(module.id));
 
-  const { recordResult, recordAnswered, getSection, getModule } = useProgress();
+  const {
+    recordResult, recordAnswered, getSection, getModule,
+    getPaused, savePausedAttempt, clearPausedAttempt,
+  } = useProgress();
+  const [paused, setPaused] = useState(() => rebuildPaused(getPaused(module.id)));
   const progress = isMock ? getModule(module.id) : getSection(module.id);
+
+  /* getPaused's identity changes whenever the store's entries change —
+     including once a sign-in's cloud merge finishes, which can land well
+     after this component's first render. Re-checking keeps a paused
+     attempt from another device from being missed just because it arrived
+     a moment too late for the initial state. Only while still on the intro
+     screen, so it can't clobber a session already running. */
+  useEffect(() => {
+    if (stage !== "intro") return;
+    setPaused(rebuildPaused(getPaused(module.id)));
+  }, [getPaused, module.id, stage]);
 
   const allQuestions = quiz.categories.flatMap(c => c.questions);
 
@@ -160,7 +151,7 @@ export default function QuizPlayer({ module, quiz, onExit }) {
       index: 0,
       elapsed: 0,
     });
-    clearPaused(module.id);
+    clearPausedAttempt(module.id);
     setPaused(null);
     setStage("running");
   };
@@ -176,8 +167,14 @@ export default function QuizPlayer({ module, quiz, onExit }) {
   };
 
   const handlePause = (state) => {
-    savePaused(module.id, state);
-    setPaused(loadPaused(module.id));
+    const raw = {
+      qids: state.questions.map(q => q.qid),
+      answers: state.answers,
+      index: state.index,
+      elapsed: state.elapsed,
+    };
+    savePausedAttempt(module.id, raw);
+    setPaused(rebuildPaused(raw));
     setStage("intro");
     setSession(null);
   };
@@ -238,7 +235,7 @@ export default function QuizPlayer({ module, quiz, onExit }) {
         sections: grade.rows.map(r => ({ id: r.id, c: r.correct, t: r.total })),
       });
 
-      clearPaused(module.id);
+      clearPausedAttempt(module.id);
       setPaused(null);
       setResult({
         ...saved,
@@ -259,7 +256,7 @@ export default function QuizPlayer({ module, quiz, onExit }) {
     const total = log.length || 1;
     const saved = await recordResult(module.id, score, total, { passMark });
 
-    clearPaused(module.id);
+    clearPausedAttempt(module.id);
     setPaused(null);
     setResult({ score, total, log, elapsed, passMark, ...saved });
     setStage("result");
@@ -338,7 +335,7 @@ export default function QuizPlayer({ module, quiz, onExit }) {
                   </span>
                 </PrimaryButton>
                 <button
-                  onClick={() => { clearPaused(module.id); setPaused(null); }}
+                  onClick={() => { clearPausedAttempt(module.id); setPaused(null); }}
                   className="w-full text-sm font-semibold text-slate-500 dark:text-slate-400 py-2"
                 >
                   Discard and start again
@@ -485,6 +482,10 @@ function QuizRun({ session, module, instantFeedback, limitSeconds, onFinish, onP
   const [revealed, setRevealed] = useState(
     instantFeedback && session.answers[session.index] !== null
   );
+  // Bumped on every celebration so <CorrectBurst key={celebrateKey}> remounts
+  // and replays even if the previous burst hadn't finished fading yet.
+  const [celebrating, setCelebrating] = useState(false);
+  const [celebrateKey, setCelebrateKey] = useState(0);
 
   const startedAt = useRef(Date.now() - session.elapsed * 1000);
   const finished = useRef(false);
@@ -574,7 +575,13 @@ function QuizRun({ session, module, instantFeedback, limitSeconds, onFinish, onP
       next[index] = optionIndex;
       return next;
     });
-    if (instantFeedback) setRevealed(true);
+    if (instantFeedback) {
+      setRevealed(true);
+      if (optionIndex === q.correct) {
+        setCelebrateKey(k => k + 1);
+        setCelebrating(true);
+      }
+    }
   }
 
   const goTo = useCallback((i) => {
@@ -588,6 +595,10 @@ function QuizRun({ session, module, instantFeedback, limitSeconds, onFinish, onP
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+      {celebrating && (
+        <CorrectBurst key={celebrateKey} onDone={() => setCelebrating(false)} />
+      )}
+
       {/* Top bar. The padding clears the notch and Dynamic Island — the
           previous value was too tight and the row sat under it. */}
       <div className="bg-slate-900 text-white sticky top-0 z-10">
@@ -1141,6 +1152,64 @@ function Stat({ label, value }) {
     <div>
       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
       <p className="mt-0.5 font-black text-slate-900 dark:text-white">{value}</p>
+    </div>
+  );
+}
+
+/* ===========================================================================
+   CORRECT BURST
+
+   A small celebration for a right answer in topic practice — a handful of
+   coloured particles and a checkmark badge, both driven by the pdt-burst /
+   pdt-pop keyframes in index.css. Not shown in a mock, where feedback is
+   deferred to the end and a burst mid-paper would rather give the answer
+   away.
+
+   Self-contained on purpose: no confetti library, just ten <span>s and a
+   circle. `prefers-reduced-motion` is already handled globally in index.css.
+   =========================================================================== */
+const BURST_COLORS = ["#10b981", "#34d399", "#6ee7b7", "#fbbf24", "#60a5fa"];
+const BURST_DURATION = 700;
+
+function CorrectBurst({ onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, BURST_DURATION);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  const particles = useMemo(() => Array.from({ length: 10 }, (_, i) => {
+    const angle = (i / 10) * Math.PI * 2;
+    const dist = 60 + Math.random() * 30;
+    return {
+      tx: Math.cos(angle) * dist,
+      ty: Math.sin(angle) * dist,
+      color: BURST_COLORS[i % BURST_COLORS.length],
+      delay: Math.round(Math.random() * 60),
+    };
+  }), []);
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center" aria-hidden="true">
+      <div className="relative w-0 h-0">
+        {particles.map((p, i) => (
+          <span
+            key={i}
+            className="absolute top-1/2 left-1/2 w-2.5 h-2.5 rounded-full"
+            style={{
+              backgroundColor: p.color,
+              "--tx": `${p.tx}px`,
+              "--ty": `${p.ty}px`,
+              animation: `pdt-burst 550ms ease-out ${p.delay}ms both`,
+            }}
+          />
+        ))}
+        <div
+          className="absolute top-1/2 left-1/2 w-14 h-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg"
+          style={{ animation: "pdt-pop 380ms ease-out both" }}
+        >
+          <Check size={28} className="text-white" strokeWidth={3} />
+        </div>
+      </div>
     </div>
   );
 }

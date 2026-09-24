@@ -41,6 +41,18 @@ sign-up trigger and the `record_result` function. It is safe to run twice.
 The commented-out block at the bottom is a check — uncomment and run it to
 confirm you get both tables and a six-argument `record_result`.
 
+Two more migrations exist for features added after the initial schema —
+**SQL Editor** → paste each → Run, same as above. Both are additive and safe
+to run twice:
+
+- `sql/add-section-results.sql` — a mock's per-section breakdown ("where the
+  marks went" on the result screen). Without it the app still works; that
+  breakdown just doesn't follow a learner between devices.
+- `sql/02-add-paused-state.sql` — a paused quiz or mock (which question,
+  what's been picked, the clock). Without it, "continue where you left off"
+  only works on the same phone; with it, it follows a signed-in learner to
+  another device, and survives the app being deleted and reinstalled.
+
 ### 3. Deploy on Vercel
 
 Import the repository. Framework preset **Vite**; the build command and output
