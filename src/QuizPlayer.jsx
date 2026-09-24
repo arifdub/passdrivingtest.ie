@@ -818,7 +818,17 @@ function QuizRun({ session, module, instantFeedback, limitSeconds, onFinish, onP
             ) : (
               <button
                 onClick={() => goTo(index + 1)}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold py-3 rounded-xl transition"
+                /* Practice reveals the answer the moment you pick one, so
+                   there's nothing to move on to until you have. A mock stays
+                   fully enabled — skipping and coming back is legitimate
+                   there, same as the real test, and a blank still counts as
+                   wrong rather than being blocked. */
+                disabled={instantFeedback && !revealed}
+                className={`flex-1 flex items-center justify-center gap-1.5 font-bold py-3 rounded-xl transition ${
+                  instantFeedback && !revealed
+                    ? "border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500"
+                    : "bg-emerald-500 hover:bg-emerald-400 text-slate-900"
+                }`}
               >
                 Next <ChevronRight size={18} />
               </button>
