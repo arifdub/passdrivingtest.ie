@@ -21,12 +21,16 @@
   ===========================================================================
 */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard, Calendar, Users, CalendarCheck, Clock, Store,
   Wallet, Star, MessageSquare, UserCircle, ChevronLeft, Hammer,
+  ShieldCheck, ShieldAlert, Clock3, Loader2, Pencil,
 } from "lucide-react";
-import { Logo, EmptyState } from "../ui";
+import { Logo, EmptyState, PrimaryButton, SecondaryButton } from "../ui";
+import { useAuth } from "../appAuth";
+import InstructorRegistration from "./InstructorRegistration";
+import { loadProfile, readDraft } from "./instructorStore";
 
 /* The nav from STEP 11, in the order an instructor's day actually runs:
    what's on today, then the calendar it sits in, then the people in it. */
@@ -85,7 +89,39 @@ const COMING = {
 };
 
 export default function InstructorPortal({ onExitRole }) {
+  const { user, isSignedIn } = useAuth();
   const [section, setSection] = useState("dashboard");
+  const [registering, setRegistering] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  /* The account's row wins; the local draft is the fallback for someone who
+     started registering before signing in, or whose table isn't created yet. */
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const { profile: row } = await loadProfile(user?.id);
+    setProfile(row);
+    setDraft(readDraft());
+    setLoading(false);
+  }, [user?.id]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const status = profile?.verification_status
+    || (draft ? "draft" : null);
+
+  if (registering) {
+    return (
+      <InstructorRegistration
+        initial={profile || draft}
+        userId={user?.id}
+        onDone={async () => { setRegistering(false); await refresh(); }}
+        onCancel={() => setRegistering(false)}
+      />
+    );
+  }
+
   const active = SECTIONS.find(s => s.id === section) || SECTIONS[0];
 
   return (
@@ -136,7 +172,16 @@ export default function InstructorPortal({ onExitRole }) {
 
       <div className="max-w-5xl mx-auto px-5 py-6 pb-24">
         {section === "dashboard"
-          ? <InstructorDashboard />
+          ? (
+            <InstructorDashboard
+              loading={loading}
+              status={status}
+              profile={profile}
+              draft={draft}
+              isSignedIn={isSignedIn}
+              onRegister={() => setRegistering(true)}
+            />
+          )
           : <ComingSoon section={active} />}
       </div>
     </div>
@@ -150,10 +195,20 @@ export default function InstructorPortal({ onExitRole }) {
    exist — which is the truthful state, not a broken one, so each tile says
    what it counts rather than just showing a bare 0.
    --------------------------------------------------------------------------- */
-function InstructorDashboard() {
+function InstructorDashboard({ loading, status, profile, draft, isSignedIn, onRegister }) {
   return (
     <>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {loading
+        ? <StatusSkeleton />
+        : <VerificationCard
+            status={status}
+            profile={profile}
+            draft={draft}
+            isSignedIn={isSignedIn}
+            onRegister={onRegister}
+          />}
+
+      <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Today's lessons" value="—" note="Nothing booked yet" />
         <Stat label="This week" value="—" note="Earnings once paid lessons run" />
         <Stat label="Active students" value="—" note="Yours plus marketplace" />
@@ -164,14 +219,13 @@ function InstructorDashboard() {
         <div className="flex items-center gap-2.5">
           <Hammer size={18} className="text-amber-500 shrink-0" />
           <h2 className="font-bold text-slate-900 dark:text-white">
-            The portal is being built
+            Still being built
           </h2>
         </div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Registration, ADI verification, your calendar and the marketplace are
-          next. Nothing here is live yet, and no numbers are being invented in
-          the meantime — every tile above will stay blank until there is a real
-          booking behind it.
+          Your calendar, students and the marketplace are next. Nothing is
+          booked yet, and no numbers are being invented in the meantime —
+          every tile above stays blank until there is a real booking behind it.
         </p>
       </div>
 
@@ -199,6 +253,143 @@ function InstructorDashboard() {
         </ul>
       </div>
     </>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   VERIFICATION
+
+   The first thing on the dashboard until it's resolved, because until an ADI
+   number has been checked nothing else in the portal matters: an unverified
+   instructor is invisible to every learner, and should be told exactly that
+   rather than left to wonder why no bookings arrive.
+   --------------------------------------------------------------------------- */
+function VerificationCard({ status, profile, draft, isSignedIn, onRegister }) {
+  /* Not started */
+  if (!status) {
+    return (
+      <Panel tone="blue" icon={ShieldCheck} title="Get verified to take bookings">
+        <p>
+          Register as an instructor and we'll check your ADI number against the
+          RSA register. Until that's done your profile isn't visible to
+          learners — which is the point: it's what the badge means.
+        </p>
+        {!isSignedIn && (
+          <p className="text-slate-500 dark:text-slate-400">
+            You can fill this in now; you'll need an account to submit it.
+          </p>
+        )}
+        <div className="mt-4">
+          <PrimaryButton onClick={onRegister}>Register as an instructor</PrimaryButton>
+        </div>
+      </Panel>
+    );
+  }
+
+  /* Started, not submitted */
+  if (status === "draft") {
+    return (
+      <Panel tone="amber" icon={Pencil} title="Your registration is half finished">
+        <p>
+          Your answers are saved. Finish them and submit, and we'll check your
+          ADI number against the RSA register.
+        </p>
+        <div className="mt-4">
+          <PrimaryButton onClick={onRegister}>Finish registering</PrimaryButton>
+        </div>
+      </Panel>
+    );
+  }
+
+  /* Waiting on a human */
+  if (status === "pending") {
+    return (
+      <Panel tone="amber" icon={Clock3} title="Verification in progress">
+        <p>
+          We've got your details and we're checking ADI
+          number <strong>{profile?.adi_number || draft?.adi_number}</strong> against
+          the RSA register. This usually takes a couple of working days.
+        </p>
+        <p className="text-slate-500 dark:text-slate-400">
+          Your profile stays hidden from learners until it's done.
+        </p>
+        <div className="mt-4">
+          <SecondaryButton onClick={onRegister}>Review my details</SecondaryButton>
+        </div>
+      </Panel>
+    );
+  }
+
+  /* Turned down */
+  if (status === "rejected") {
+    return (
+      <Panel tone="red" icon={ShieldAlert} title="We couldn't verify your ADI number">
+        <p>
+          {profile?.verification_notes
+            || "The number didn't match the RSA register. Check it and submit again."}
+        </p>
+        <div className="mt-4">
+          <PrimaryButton onClick={onRegister}>Update and resubmit</PrimaryButton>
+        </div>
+      </Panel>
+    );
+  }
+
+  if (status === "suspended") {
+    return (
+      <Panel tone="red" icon={ShieldAlert} title="Your account is suspended">
+        <p>
+          {profile?.verification_notes
+            || "Your profile has been withdrawn from the marketplace. Get in touch to sort it out."}
+        </p>
+      </Panel>
+    );
+  }
+
+  /* Verified */
+  return (
+    <Panel tone="green" icon={ShieldCheck} title="Verified ADI">
+      <p>
+        ADI number <strong>{profile?.adi_number}</strong> checked against the RSA
+        register. {profile?.listed
+          ? "Your profile is visible to learners."
+          : "Your profile is verified but not listed yet — that switch arrives with the marketplace."}
+      </p>
+      <div className="mt-4">
+        <SecondaryButton onClick={onRegister}>Edit my profile</SecondaryButton>
+      </div>
+    </Panel>
+  );
+}
+
+const TONES = {
+  blue:  "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400",
+  amber: "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-600 dark:text-amber-400",
+  green: "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400",
+  red:   "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-600 dark:text-red-400",
+};
+
+function Panel({ tone, icon: Icon, title, children }) {
+  const cls = TONES[tone] || TONES.blue;
+  return (
+    <div className={`border rounded-2xl p-5 ${cls.replace(/text-\S+/g, "")}`}>
+      <div className="flex items-center gap-2.5">
+        <Icon size={18} className={`shrink-0 ${cls.split(" ").filter(c => c.startsWith("text-")).join(" ")}`} />
+        <h2 className="font-bold text-slate-900 dark:text-white">{title}</h2>
+      </div>
+      <div className="mt-2 space-y-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function StatusSkeleton() {
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-2xl p-5 flex items-center gap-3">
+      <Loader2 size={18} className="text-slate-400 animate-spin shrink-0" />
+      <p className="text-sm text-slate-500 dark:text-slate-400">Checking your registration…</p>
+    </div>
   );
 }
 
