@@ -1,5 +1,11 @@
 {
   "rewrites": [
+    { "source": "/student", "destination": "/app/index.html" },
+    { "source": "/student/(.*)", "destination": "/app/index.html" },
+    { "source": "/adi", "destination": "/app/index.html" },
+    { "source": "/adi/(.*)", "destination": "/app/index.html" },
+    { "source": "/admin", "destination": "/app/index.html" },
+    { "source": "/admin/(.*)", "destination": "/app/index.html" },
     { "source": "/app", "destination": "/app/index.html" },
     { "source": "/app/(.*)", "destination": "/app/index.html" }
   ]

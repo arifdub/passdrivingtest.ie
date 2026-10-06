@@ -42,6 +42,7 @@ import RoleEntry from "./RoleEntry";
 import StudentOnboarding from "./StudentOnboarding";
 import StudentJourney from "./StudentJourney";
 import InstructorPortal from "./instructor/InstructorPortal";
+import AdminPortal from "./admin/AdminPortal";
 import { HomeScreen, MockHubScreen, ProgressScreen, ProfileScreen } from "./screens";
 import QuizPlayer from "./QuizPlayer";
 import FlashcardPlayer from "./FlashcardPlayer";
@@ -490,55 +491,96 @@ function StudentGate() {
 /* ===========================================================================
    ROUTES
 
-   Four of them, and each one answers a different question:
+   Three doors, each a top-level address someone can be sent:
 
-     /                     who are you?            (asked once)
-     /student/onboarding   where are you up to?    (asked once)
-     /student              the learning app
-     /instructor           the instructor's business
+     /student   the learning app        (theory, journey, progress)
+     /adi       the instructor's business
+     /admin     platform administration
+
+   plus two supporting paths:
+
+     /student/onboarding   where are you up to?  (asked once)
+     /app                  the legacy entry
+
+   WHY /app STILL EXISTS
+
+   Because home-screen icons point at it. The manifest's start_url is /app/,
+   and every learner who already installed the app has that URL baked into
+   their icon — iOS captured it at install time and will not re-read the
+   manifest. Removing the route would turn their app into a 404. So it stays,
+   and forwards to whichever door suits them.
+
+   The front door itself is no longer in here: it's the static page at /,
+   which is faster, indexable, and the thing people actually type.
    =========================================================================== */
-function FrontDoor() {
+function LegacyEntry() {
   const { hasChosenRole, isInstructor, setRole } = usePlatform();
   const navigate = useNavigate();
 
-  /* Already answered on a previous visit — don't ask again. */
+  /* Someone who has used the app before goes straight back to their side. */
   if (hasChosenRole) {
-    return <Navigate to={isInstructor ? "/instructor" : "/student"} replace />;
+    return <Navigate to={isInstructor ? "/adi" : "/student"} replace />;
   }
 
+  /* An installed app with no stored role — most likely a learner whose
+     browser data was cleared. Ask rather than guess. */
   return (
     <RoleEntry
       onChoose={(role) => {
         setRole(role);
-        /* A student gets one more question before the app; an instructor
-           goes straight to their portal, because "where are you on your
-           driving journey?" is not a question they have an answer to. */
-        navigate(role === "instructor" ? "/instructor" : "/student/onboarding");
+        navigate(role === "instructor" ? "/adi" : "/student/onboarding");
       }}
     />
   );
 }
 
 function StudentOnboardingRoute() {
-  const { setJourneyStage, clearRole } = usePlatform();
+  const { setJourneyStage } = usePlatform();
+  const { isSignedIn, continueAsGuest } = useAuth();
   const navigate = useNavigate();
 
   return (
     <StudentOnboarding
       onContinue={(stageId) => {
         setJourneyStage(stageId);
+
+        /* STRAIGHT INTO THE LEARNING SECTION, NOT A SIGN-UP SCREEN.
+
+           They clicked "Start learning — free" on the front door and then
+           answered a question about themselves. Asking for an email before
+           showing them a single question is how that goodwill gets spent.
+
+           Guest mode already exists and already does the right thing: Rules
+           of the Road and the flashcards in full, the other five topics and
+           the mock tests visible but locked, each one offering a free
+           account. The ask happens where it means something — at the thing
+           they just tried to open — instead of at the door.
+
+           Signing in still gets them everything, and every locked topic,
+           the journey screen and Settings all lead there. */
+        if (!isSignedIn) continueAsGuest();
+
         navigate("/student", { replace: true });
       }}
-      onBack={() => {
-        clearRole();
-        navigate("/", { replace: true });
-      }}
+      /* Back goes out to the front door, which is a real page, not a route
+         this router owns. */
+      onBack={() => { window.location.href = "/"; }}
     />
   );
 }
 
 function StudentRoute() {
-  const { journeyStage } = usePlatform();
+  const { journeyStage, claimRole } = usePlatform();
+
+  /* Arriving at /student is the answer to "which are you?", the same way
+     /adi is. Most learners now come straight from the landing page and never
+     see the in-app chooser, so without this their role is never recorded —
+     and the next time they open their installed app at /app it would ask
+     them to pick a side they already picked.
+
+     claimRole, not setRole: it fills a blank and never overwrites a choice
+     already made. See platform.jsx. */
+  useEffect(() => { claimRole("student"); }, [claimRole]);
 
   /* Someone who chose "student" but never answered the journey question —
      including everyone who was already using the app before the platform
@@ -549,15 +591,20 @@ function StudentRoute() {
 }
 
 function InstructorRoute() {
-  const { clearRole } = usePlatform();
-  const navigate = useNavigate();
+  const { claimRole } = usePlatform();
+
+  /* Same as the student side: record the door they came through so /app
+     knows where to send them next time — but only if they hadn't already
+     picked one. A learner who taps "For instructors" on the front door to
+     see what it is must not have their app switched out from under them. */
+  useEffect(() => { claimRole("instructor"); }, [claimRole]);
 
   return (
     <InstructorPortal
-      onExitRole={() => {
-        clearRole();
-        navigate("/", { replace: true });
-      }}
+      /* Back out to the static front door, not an in-app screen: that page
+         is where both doors are. A full navigation, because / is not a route
+         this router owns. */
+      onExitRole={() => { window.location.href = "/"; }}
     />
   );
 }
@@ -577,15 +624,20 @@ export default function App() {
               account the moment they make one, and come back down on another
               device when they sign in. */}
           <PlatformProvider>
-            <BrowserRouter basename="/app">
+            {/* No basename. The same bundle is served at /student, /adi,
+                /admin and /app — Vercel rewrites all four to this page — so
+                the router matches real, top-level paths. */}
+            <BrowserRouter>
               <Routes>
-                <Route path="/" element={<FrontDoor />} />
                 <Route path="/student/onboarding" element={<StudentOnboardingRoute />} />
                 <Route path="/student/*" element={<StudentRoute />} />
-                <Route path="/instructor/*" element={<InstructorRoute />} />
-                {/* Anything unrecognised goes back to the front door rather
-                    than showing a dead end. */}
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="/adi/*" element={<InstructorRoute />} />
+                <Route path="/admin/*" element={<AdminPortal />} />
+
+                {/* Legacy, and the fallback. Both land somewhere useful
+                    rather than on a dead end. */}
+                <Route path="/app/*" element={<LegacyEntry />} />
+                <Route path="*" element={<LegacyEntry />} />
               </Routes>
             </BrowserRouter>
           </PlatformProvider>

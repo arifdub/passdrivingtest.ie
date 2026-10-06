@@ -1,30 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  One page, because there is one page worth indexing. /app is noindex.
+  Two pages worth indexing now, not one.
+
+    /                      the front door — what the platform is, and the
+                           two doors into it
+    /driver-theory-test/   the full guide to the Driver Theory Test. This is
+                           the page that carries the FAQ and HowTo schema and
+                           the one that ranks for the test itself; it used to
+                           live at / and was moved when the front door was
+                           built, with its content and metadata intact.
+
+  /student, /adi and /admin are deliberately absent: they are the app, they
+  are behind a choice or a login, and they have nothing to rank.
+
+  Priority says the guide matters at least as much as the home page, because
+  in search it does — it is the page people are looking for when they type
+  "driver theory test".
 
   Update <lastmod> when the content genuinely changes — fees, rules, dates.
   Bumping it on every deploy teaches Google to ignore it.
 
-  The image:image entries use the Google Image sitemap extension so the
-  brand mark and social card are attributed to this URL for Google Images,
-  rather than relying on Google finding and guessing at them on its own.
-  wheel-sm.png is deliberately left out — it's decorative (empty alt in the
-  HTML) and not something worth surfacing as a standalone image result.
+  The image:image entries use the Google Image sitemap extension so the brand
+  mark and social card are attributed to a URL for Google Images, rather than
+  relying on Google finding and guessing at them on its own. wheel-sm.png is
+  deliberately left out — it's decorative (empty alt in the HTML) and not
+  something worth surfacing as a standalone image result.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://passdrivingtest.ie/</loc>
-    <lastmod>2026-09-20</lastmod>
+    <lastmod>2026-10-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
     <image:image>
       <image:loc>https://passdrivingtest.ie/og-card.png</image:loc>
-      <image:title>PassDrivingTest.ie — Driver Theory Test practice</image:title>
+      <image:title>PassDrivingTest.ie — your complete driving journey</image:title>
     </image:image>
     <image:image>
       <image:loc>https://passdrivingtest.ie/logo.png</image:loc>
       <image:title>PassDrivingTest.ie logo</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://passdrivingtest.ie/driver-theory-test/</loc>
+    <lastmod>2026-10-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://passdrivingtest.ie/og-card.png</image:loc>
+      <image:title>Irish Driver Theory Test — format, fees and free practice</image:title>
     </image:image>
   </url>
 </urlset>

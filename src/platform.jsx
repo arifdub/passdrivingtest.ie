@@ -241,6 +241,25 @@ export function PlatformProvider({ children }) {
     writeLocal(ROLE_KEY, null);
   }, []);
 
+  /* "I arrived at this door" — as distinct from "I am this".
+
+     FIRST DOOR WINS, AND IT HAS TO.
+
+     Both /student and /adi record who walked through them, so that someone
+     who came straight from the landing page still has a role stored and
+     isn't asked to pick again next time they open their installed app.
+
+     But merely LOOKING is not choosing. A learner who taps "For instructors"
+     on the front door out of curiosity must not come back to find their app
+     opening an instructor portal — and an instructor glancing at the student
+     side must not lose their way back. So this only ever fills a blank;
+     changing sides for real goes through setRole, which is what the explicit
+     controls use. */
+  const claimRole = useCallback((next) => {
+    if (role || !next) return;
+    setRole(next);
+  }, [role, setRole]);
+
   const value = useMemo(() => ({
     role,
     journeyStage,
@@ -250,9 +269,10 @@ export function PlatformProvider({ children }) {
     isAdmin: role === "admin" || role === "super_admin",
     hasChosenRole: Boolean(role),
     setRole,
+    claimRole,
     setJourneyStage,
     clearRole,
-  }), [role, journeyStage, setRole, setJourneyStage, clearRole]);
+  }), [role, journeyStage, setRole, claimRole, setJourneyStage, clearRole]);
 
   return (
     <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>
