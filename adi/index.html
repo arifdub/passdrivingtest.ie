@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
+    />
+
+    <title>PassDrivingTest Instructor</title>
+    <meta
+      name="description"
+      content="The instructor portal for PassDrivingTest.ie — registration, ADI verification, students and bookings."
+    />
+    <meta name="robots" content="noindex, follow" />
+
+    <!-- =====================================================================
+         WHY THIS FILE EXISTS AT ALL
+
+         It loads the same bundle as app/index.html and renders the same React
+         router. Nothing in here is a second application.
+
+         What it is, is a second INSTALLABLE app. A manifest belongs to the
+         HTML document that links it, and one document can link exactly one.
+         While /adi and /student were the same document, there was one
+         manifest, one name, one icon and one start_url — so an instructor
+         adding the portal to their home screen got an icon called
+         PassDrivingTest that opened the learner's app.
+
+         Two documents, two manifests, two home-screen apps. The cost is this
+         file; everything behind it is shared.
+         ===================================================================== -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/adi-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/adi-apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest-adi.json" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- iOS takes the home-screen label from here, not from the manifest, and
+         it does not re-read it after the icon is added. Short, because iOS
+         truncates at about 12 characters. -->
+    <meta name="apple-mobile-web-app-title" content="PDT Instructor" />
+
+    <!-- The app's light theme. Shared with app/index.html — see the file. -->
+    <link rel="stylesheet" href="/app-theme.css" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <!-- Absolute, so it resolves the same whether this is served as /adi or
+         /adi/ — a relative path would break on one of them. -->
+    <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      // Scoped to /adi, so the instructor's installed app governs its own
+      // pages and nothing else. The learner's worker is registered at /app/
+      // from the other entry; neither reaches the static landing page.
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker
+            .register("/sw.js", { scope: "/adi" })
+            .catch(function () {
+              /* Install-to-home-screen won't be offered. Nothing else breaks. */
+            });
+        });
+      }
+    </script>
+  </body>
+</html>

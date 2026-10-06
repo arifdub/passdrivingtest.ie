@@ -51,6 +51,10 @@ export default defineConfig({
         landing: "index.html",
         guide: "driver-theory-test/index.html",
         app: "app/index.html",
+        /* The instructor's installable app. Same bundle, same router — a
+           separate document only so it can carry its own manifest, name and
+           icon. See adi/index.html. */
+        adi: "adi/index.html",
       },
     },
   },

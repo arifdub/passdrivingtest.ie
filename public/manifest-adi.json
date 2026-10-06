@@ -1,0 +1,17 @@
+{
+  "id": "/adi",
+  "name": "PassDrivingTest Instructor",
+  "short_name": "PDT Instructor",
+  "description": "The instructor portal for PassDrivingTest.ie — ADI verification, your students, your calendar and your bookings.",
+  "start_url": "/adi",
+  "scope": "/adi",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/adi-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/adi-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/adi-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
