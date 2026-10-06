@@ -1,21 +1,4 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-
-  "//": [
-    "Deep links into the app. The app is a single page served from",
-    "/app/index.html; now that it has a router, URLs like /app/instructor and",
-    "/app/student/onboarding are real addresses a learner can bookmark, be",
-    "sent, or be returned to after an email confirmation link.",
-    "",
-    "Without this rule the hosting layer looks for a FILE at that path, finds",
-    "nothing and returns 404 — the classic single-page-app deployment bug,",
-    "and one that only shows up in production, never in `vite dev`.",
-    "",
-    "Rewrites are checked after the filesystem, so /app/index.html and every",
-    "hashed asset under /assets/ are still served directly. The landing page",
-    "at / is untouched: this matches nothing outside /app."
-  ],
-
   "rewrites": [
     { "source": "/app", "destination": "/app/index.html" },
     { "source": "/app/(.*)", "destination": "/app/index.html" }
