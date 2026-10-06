@@ -97,6 +97,56 @@ export const JOURNEY_STAGES = [
 
 export const STAGE_BY_ID = Object.fromEntries(JOURNEY_STAGES.map(s => [s.id, s]));
 
+/* ---------------------------------------------------------------------------
+   THE JOURNEY ITSELF
+
+   Eight milestones from first study to full licence (STEP 26). This is a
+   different list from JOURNEY_STAGES above, and the difference matters:
+   those six are the answers to "where are you?", these eight are the road
+   being travelled. One is a question, the other is the map.
+
+   WHAT THE APP CAN AND CANNOT KNOW
+
+   It can see every question answered and every mock sat, because it ran
+   them. It cannot see whether someone passed the real theory test at a
+   Prometric centre, or whether a permit arrived in the post — no integration
+   exists, and inventing one would be lying to a learner about their own
+   progress.
+
+   So those milestones are taken from what the learner said about themselves
+   at onboarding, and can be corrected at any time. Self-declared is honest;
+   guessed is not.
+   --------------------------------------------------------------------------- */
+export const JOURNEY_PATH = [
+  { id: "theory",      label: "Theory Test",      blurb: "Learn the rules, signs and practise the questions." },
+  { id: "permit",      label: "Learner Permit",   blurb: "Apply to the NDLS once you've passed the theory test." },
+  { id: "edt",         label: "EDT",              blurb: "The 12 Essential Driver Training lessons with an ADI." },
+  { id: "practice",    label: "Practice",         blurb: "Supervised hours between lessons." },
+  { id: "mock",        label: "Mock Test",        blurb: "A full paper under exam conditions." },
+  { id: "test-prep",   label: "Test Preparation", blurb: "Pre-test lessons and the test-centre routes." },
+  { id: "driving-test", label: "Driving Test",    blurb: "The day itself." },
+  { id: "full-licence", label: "Full Licence",    blurb: "Two years on N-plates, then you're done." },
+];
+
+/* How far along the map each onboarding answer puts someone. Everything
+   before this index is treated as behind them.
+
+   "refresher" and "test-car" are not earlier stages of the same road — they
+   are people who already drive, arriving for one specific thing. Both are
+   placed at test preparation because that is what they came for. */
+const STAGE_REACHED = {
+  theory: 0,
+  permit: 1,
+  edt: 2,
+  "test-prep": 5,
+  refresher: 5,
+  "test-car": 6,
+};
+
+export function reachedIndexFor(stageId) {
+  return STAGE_REACHED[stageId] ?? 0;
+}
+
 const PlatformContext = createContext(null);
 
 function readLocal(key) {

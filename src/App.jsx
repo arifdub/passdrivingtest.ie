@@ -29,7 +29,9 @@ import {
 } from "react-router-dom";
 import {
   Home as HomeIcon, BookOpen, Timer, TrendingUp, User, Loader2, Lock,
-  Settings as SettingsIcon,
+  /* Aliased: react-router exports a <Route> too, and the collision is a
+     build error, not a warning. */
+  Settings as SettingsIcon, Route as RouteIcon,
 } from "lucide-react";
 import { AuthProvider, useAuth } from "./appAuth";
 import { PlatformProvider, usePlatform } from "./platform";
@@ -38,6 +40,7 @@ import { TextSizeProvider } from "./textSize";
 import AuthScreen from "./AuthScreen";
 import RoleEntry from "./RoleEntry";
 import StudentOnboarding from "./StudentOnboarding";
+import StudentJourney from "./StudentJourney";
 import InstructorPortal from "./instructor/InstructorPortal";
 import { HomeScreen, MockHubScreen, ProgressScreen, ProfileScreen } from "./screens";
 import QuizPlayer from "./QuizPlayer";
@@ -53,7 +56,15 @@ import { EmptyState } from "./ui";
    learner straight into a 90-minute timed exam. */
 const TABS = [
   { id: "home",     label: "Home",      icon: HomeIcon },
-  { id: "mocks",    label: "Mock Test", icon: Timer },
+  /* The journey sits between the theory section and the exam, which is where
+     it belongs in the product too: it is the map that explains why the
+     theory section is the first thing a learner sees. */
+  { id: "journey",  label: "Journey",   icon: RouteIcon },
+  /* "Mocks", not "Mock Test": with five tabs the longer label wraps onto two
+     lines on a 320px phone and makes that one tab taller than its
+     neighbours. Only the label changed — the screen id stays "mocks", which
+     is what the routing and the tab/route mapping are keyed on. */
+  { id: "mocks",    label: "Mocks",     icon: Timer },
   { id: "progress", label: "Progress",  icon: TrendingUp },
   /* The screen id stays "profile" deliberately — it's only the label that
      changed, and renaming the route would break the tab/route mapping for no
@@ -66,8 +77,22 @@ const TABS = [
    NAVIGATION SHELL
    =========================================================================== */
 function AppShell() {
-  const [tab, setTab] = useState("home");
-  const [stack, setStack] = useState([{ screen: "home" }]);
+  const { journeyStage } = usePlatform();
+
+  /* WHERE A LEARNER LANDS DEPENDS ON WHAT THEY TOLD US.
+
+     Someone studying for the theory test should open straight into the thing
+     they came for — the topics and the questions — with no map in the way.
+
+     Everyone else said they are past it: they hold a permit, they're doing
+     EDT, they need a car for test day. Opening those five on a theory-test
+     home screen tells them this app isn't for them. They get the journey
+     instead, which shows where they are, says plainly which parts aren't
+     built yet, and still offers the theory section. */
+  const startTab = journeyStage && journeyStage !== "theory" ? "journey" : "home";
+
+  const [tab, setTab] = useState(startTab);
+  const [stack, setStack] = useState([{ screen: startTab }]);
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("pdt-theme") || "light";
@@ -169,6 +194,7 @@ function isFullScreen(view) {
    =========================================================================== */
 function CurrentScreen({ view, go, back, theme, toggleTheme }) {
   const { isGuest, exitGuest } = useAuth();
+  const navigate = useNavigate();
 
   /* A guest can reach a locked section from the Progress tab as well as the
      home screen, so the check lives here too. The home screen's lock is the
@@ -183,6 +209,15 @@ function CurrentScreen({ view, go, back, theme, toggleTheme }) {
   switch (view.screen) {
     case "home":
       return <HomeScreen go={go} />;
+
+    /* The whole road, theory to full licence, and what to do next. */
+    case "journey":
+      return (
+        <StudentJourney
+          go={go}
+          onChangeStage={() => navigate("/student/onboarding")}
+        />
+      );
 
     /* The Mock Test tab — the list of papers and how ready you are. Note the
        plural: "mock" below is a paper actually being sat. */
