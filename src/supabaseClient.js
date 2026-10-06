@@ -28,6 +28,26 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const HAS_SUPABASE = Boolean(supabaseUrl && supabaseAnonKey);
 
+/* The host, for diagnostics. Not a secret: this URL and the anon key are
+   compiled into the bundle every visitor downloads — that is how a browser
+   client works, and why the anon key is called anon. Row-level security, not
+   obscurity, is what protects the data.
+
+   It's exported because "couldn't reach the server" is a different problem
+   depending on WHICH server was unreachable, and until now there was no way
+   to tell from a deployed build whether the URL was even the intended one.
+   A typo in a Vercel environment variable and a paused project look
+   identical from the outside. */
+export const SUPABASE_HOST = (() => {
+  try { return new URL(supabaseUrl).host; } catch { return null; }
+})();
+
+if (HAS_SUPABASE) {
+  console.info(
+    `Supabase: ${SUPABASE_HOST || "unparseable URL — check VITE_SUPABASE_URL"}`
+  );
+}
+
 /* A stand-in that absorbs any property access or call without throwing.
    Nothing should reach it while HAS_SUPABASE is false, but if something
    slips through, the app degrades instead of dying. */

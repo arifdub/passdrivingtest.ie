@@ -26,7 +26,7 @@
 import React, {
   createContext, useContext, useState, useEffect, useCallback, useMemo,
 } from "react";
-import { supabase, HAS_SUPABASE } from "./supabaseClient";
+import { supabase, HAS_SUPABASE, SUPABASE_HOST } from "./supabaseClient";
 
 /* -------------------------------------------------------------------------
    THE SUBSCRIPTION SWITCH — the only line to change when payments go live.
@@ -188,7 +188,11 @@ export function AuthProvider({ children }) {
       /load failed|failed to fetch|networkerror|network request failed|fetch failed/i;
 
     if (networkish.test(raw) || err?.name === "AuthRetryableFetchError") {
-      console.error("Supabase request did not complete:", err);
+      console.error(
+        `Supabase request did not complete. Host: ${SUPABASE_HOST || "not set"}. ` +
+        "A paused project, a wrong VITE_SUPABASE_URL and no connection all " +
+        "look the same from here.", err
+      );
       return "Couldn't reach the server. Check your connection and try again — " +
              "nothing was sent, so you can retry safely.";
     }
