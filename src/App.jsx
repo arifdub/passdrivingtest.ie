@@ -5,22 +5,40 @@
   Holds the navigation stack, the bottom tab bar, and the gate that decides
   whether to show the login screen or the app.
 
-  Navigation is a plain stack of view objects rather than a router. The app is
-  a fixed tree — home → path → section → module — and a stack gives a correct
-  back button on every screen with no URL handling to get wrong. Swap in a
-  router later if deep links are ever needed.
+  TWO LAYERS OF NAVIGATION, ON PURPOSE
+
+  Outside: a real router (react-router-dom), because the platform now has
+  parts that must have URLs — the front door, the student side, the
+  instructor portal, and in time public instructor profiles that Google has
+  to be able to index and a learner has to be able to send to a friend.
+
+  Inside the student app: the original stack of view objects. The theory
+  section is a fixed tree — home → section → module — and a stack gives a
+  correct back button on every screen with no URL handling to get wrong.
+  Converting it to routes buys nothing today and would risk the one part of
+  this application that is already finished and in use, so it stays.
+
+  Deep links under /app need a rewrite to /app/index.html in production;
+  see vercel.json.
   ===========================================================================
 */
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
+  BrowserRouter, Routes, Route, Navigate, useNavigate,
+} from "react-router-dom";
+import {
   Home as HomeIcon, BookOpen, Timer, TrendingUp, User, Loader2, Lock,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { AuthProvider, useAuth } from "./appAuth";
+import { PlatformProvider, usePlatform } from "./platform";
 import { ProgressProvider } from "./progressStore";
 import { TextSizeProvider } from "./textSize";
 import AuthScreen from "./AuthScreen";
+import RoleEntry from "./RoleEntry";
+import StudentOnboarding from "./StudentOnboarding";
+import InstructorPortal from "./instructor/InstructorPortal";
 import { HomeScreen, MockHubScreen, ProgressScreen, ProfileScreen } from "./screens";
 import QuizPlayer from "./QuizPlayer";
 import FlashcardPlayer from "./FlashcardPlayer";
@@ -407,9 +425,13 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ===========================================================================
-   GATE
+   GATE — the student app, behind whatever access rules apply
+
+   Unchanged from before the platform split: the theory experience and who is
+   allowed into it are exactly as they were. It simply sits under /student now
+   rather than being the whole application.
    =========================================================================== */
-function Gate() {
+function StudentGate() {
   const { loading, hasAccess } = useAuth();
 
   if (loading) {
@@ -431,6 +453,81 @@ function Gate() {
 }
 
 /* ===========================================================================
+   ROUTES
+
+   Four of them, and each one answers a different question:
+
+     /                     who are you?            (asked once)
+     /student/onboarding   where are you up to?    (asked once)
+     /student              the learning app
+     /instructor           the instructor's business
+   =========================================================================== */
+function FrontDoor() {
+  const { hasChosenRole, isInstructor, setRole } = usePlatform();
+  const navigate = useNavigate();
+
+  /* Already answered on a previous visit — don't ask again. */
+  if (hasChosenRole) {
+    return <Navigate to={isInstructor ? "/instructor" : "/student"} replace />;
+  }
+
+  return (
+    <RoleEntry
+      onChoose={(role) => {
+        setRole(role);
+        /* A student gets one more question before the app; an instructor
+           goes straight to their portal, because "where are you on your
+           driving journey?" is not a question they have an answer to. */
+        navigate(role === "instructor" ? "/instructor" : "/student/onboarding");
+      }}
+    />
+  );
+}
+
+function StudentOnboardingRoute() {
+  const { setJourneyStage, clearRole } = usePlatform();
+  const navigate = useNavigate();
+
+  return (
+    <StudentOnboarding
+      onContinue={(stageId) => {
+        setJourneyStage(stageId);
+        navigate("/student", { replace: true });
+      }}
+      onBack={() => {
+        clearRole();
+        navigate("/", { replace: true });
+      }}
+    />
+  );
+}
+
+function StudentRoute() {
+  const { journeyStage } = usePlatform();
+
+  /* Someone who chose "student" but never answered the journey question —
+     including everyone who was already using the app before the platform
+     split — is asked once, then never again. */
+  if (!journeyStage) return <Navigate to="/student/onboarding" replace />;
+
+  return <StudentGate />;
+}
+
+function InstructorRoute() {
+  const { clearRole } = usePlatform();
+  const navigate = useNavigate();
+
+  return (
+    <InstructorPortal
+      onExitRole={() => {
+        clearRole();
+        navigate("/", { replace: true });
+      }}
+    />
+  );
+}
+
+/* ===========================================================================
    ROOT
    =========================================================================== */
 export default function App() {
@@ -441,7 +538,22 @@ export default function App() {
           and login screens too — and survive signing out. */}
       <TextSizeProvider>
         <AuthProvider>
-          <Gate />
+          {/* Inside Auth so the chosen role can follow a learner up to their
+              account the moment they make one, and come back down on another
+              device when they sign in. */}
+          <PlatformProvider>
+            <BrowserRouter basename="/app">
+              <Routes>
+                <Route path="/" element={<FrontDoor />} />
+                <Route path="/student/onboarding" element={<StudentOnboardingRoute />} />
+                <Route path="/student/*" element={<StudentRoute />} />
+                <Route path="/instructor/*" element={<InstructorRoute />} />
+                {/* Anything unrecognised goes back to the front door rather
+                    than showing a dead end. */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </PlatformProvider>
         </AuthProvider>
       </TextSizeProvider>
     </ErrorBoundary>
