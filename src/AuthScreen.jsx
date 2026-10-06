@@ -158,31 +158,67 @@ export default function AuthScreen({
         {isWelcome ? (
           <>
             <h1 className="mt-6 text-2xl font-black tracking-tight text-white text-center">
-              Welcome
+              {isInstructor ? "Instructor portal" : "Welcome"}
             </h1>
-            <p className="mt-2 text-sm text-slate-300 text-center leading-relaxed">
-              Preparation for the <span className="text-white font-semibold">Driver
-              Theory Test</span> — the written test you pass before you can apply for a
-              learner permit and start driving lessons.
-            </p>
 
-            <div className="mt-6 w-full grid grid-cols-2 gap-2.5">
-              <Feature icon={ListChecks} title={`${TOTAL_QUESTIONS}+ questions`}
-                       body="Across six topics, signs included" />
-              <Feature icon={Timer} title="Mock tests"
-                       body="40 questions in 45 minutes, like the real test" />
-              <Feature icon={Layers} title="Flashcards"
-                       body="Rules of the Road and every official sign" />
-              <Feature icon={TrendingUp} title="Progress tracking"
-                       body="See which topics still need work" />
-            </div>
+            {isInstructor ? (
+              <>
+                <p className="mt-2 text-sm text-slate-300 text-center leading-relaxed">
+                  For <span className="text-white font-semibold">approved driving
+                  instructors</span> on the RSA register. Create an account to get
+                  started — the rest can wait.
+                </p>
+
+                {/* WHAT THIS LIST IS, AND WHAT IT ISN'T
+
+                    Not a feature grid. The learner's side has one because those
+                    four things exist and work today; the instructor's side has
+                    registration and verification built, and the calendar,
+                    students and payments still to come. Four tiles implying
+                    otherwise would be a promise made at the door to someone
+                    deciding whether to walk through it.
+
+                    What's honest, and more useful anyway, is the sequence: an
+                    ADI deciding whether to sign up wants to know how long it
+                    takes and what's asked of them. */}
+                <ol className="mt-6 w-full space-y-2.5">
+                  <Stage n="1" title="Create your account"
+                         body="An email and a password. Nothing else, for now." />
+                  <Stage n="2" title="Add your details when it suits"
+                         body="ADI number, areas, transmission, lesson types and rates — saved as you go." />
+                  <Stage n="3" title="We check the register"
+                         body="Your ADI number is checked against the RSA's, by a person." />
+                  <Stage n="4" title="Learners can find you"
+                         body="Your profile goes live once that check passes." />
+                </ol>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-slate-300 text-center leading-relaxed">
+                  Preparation for the <span className="text-white font-semibold">Driver
+                  Theory Test</span> — the written test you pass before you can apply for a
+                  learner permit and start driving lessons.
+                </p>
+
+                <div className="mt-6 w-full grid grid-cols-2 gap-2.5">
+                  <Feature icon={ListChecks} title={`${TOTAL_QUESTIONS}+ questions`}
+                           body="Across six topics, signs included" />
+                  <Feature icon={Timer} title="Mock tests"
+                           body="40 questions in 45 minutes, like the real test" />
+                  <Feature icon={Layers} title="Flashcards"
+                           body="Rules of the Road and every official sign" />
+                  <Feature icon={TrendingUp} title="Progress tracking"
+                           body="See which topics still need work" />
+                </div>
+              </>
+            )}
 
             <div className="mt-7 w-full space-y-2.5">
               <button
                 onClick={() => { setView("signup"); setMessage(null); }}
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold py-3.5 rounded-xl transition"
               >
-                Create an account
+                {isInstructor ? "Register as an instructor" : "Create an account"}
               </button>
               <button
                 onClick={() => { setView("login"); setMessage(null); }}
@@ -207,7 +243,20 @@ export default function AuthScreen({
               </p>
             )}
 
-            <InstallPopup />
+            {/* A way out. The student gate passes no onBack because it is the
+                app's own first screen with nothing behind it; /adi passes one
+                because the visitor arrived from the landing page and may well
+                have meant the learner door. */}
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="mt-3 w-full text-sm font-semibold text-slate-400 hover:text-emerald-400 py-2.5"
+              >
+                Back to passdrivingtest.ie
+              </button>
+            )}
+
+            {!isInstructor && <InstallPopup />}
           </>
         ) : (
           <>
@@ -334,6 +383,21 @@ export default function AuthScreen({
         )}
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------------- */
+function Stage({ n, title, body }) {
+  return (
+    <li className="flex gap-3 bg-slate-800/60 border border-slate-700 rounded-xl p-3">
+      <span className="shrink-0 w-6 h-6 rounded-lg bg-emerald-500 text-slate-900 text-xs font-black flex items-center justify-center">
+        {n}
+      </span>
+      <div>
+        <p className="text-sm font-bold text-white leading-tight">{title}</p>
+        <p className="mt-0.5 text-xs text-slate-400 leading-snug">{body}</p>
+      </div>
+    </li>
   );
 }
 

@@ -162,6 +162,39 @@ export function AuthProvider({ children }) {
   }, [loadProfile]);
 
   /* ---- sign up ---- */
+  /* ---------------------------------------------------------------------
+     SAYING WHAT WENT WRONG
+
+     When supabase-js can't complete its request it hands back whatever the
+     browser threw, and browsers word that for browser engineers: Safari says
+     "Load failed", Chrome says "Failed to fetch", Firefox says
+     "NetworkError when attempting to fetch resource". Someone halfway
+     through creating an account sees two words that look like the page
+     broke, with nothing to do about it — and it isn't even their password or
+     their email that's at fault.
+
+     A failed fetch means the request never reached the server: no connection,
+     a blocker on the device, or the project being unreachable at the other
+     end. That's worth saying plainly, and worth distinguishing from a real
+     rejection, which arrives as a sentence from the server and is passed
+     through untouched.
+
+     The original text still goes to the console, because the person who can
+     actually fix the far end is the one reading it.
+     --------------------------------------------------------------------- */
+  const describeAuthError = useCallback((err) => {
+    const raw = err?.message || "Something went wrong.";
+    const networkish =
+      /load failed|failed to fetch|networkerror|network request failed|fetch failed/i;
+
+    if (networkish.test(raw) || err?.name === "AuthRetryableFetchError") {
+      console.error("Supabase request did not complete:", err);
+      return "Couldn't reach the server. Check your connection and try again — " +
+             "nothing was sent, so you can retry safely.";
+    }
+    return raw;
+  }, []);
+
   const signUp = useCallback(async ({ email, password, fullName }) => {
     setError(null);
 
@@ -190,8 +223,9 @@ export function AuthProvider({ children }) {
     });
 
     if (err) {
-      setError(err.message);
-      return { ok: false, error: err.message };
+      const msg = describeAuthError(err);
+      setError(msg);
+      return { ok: false, error: msg };
     }
 
     // With "Confirm email" switched on in Supabase, there's no session yet —
@@ -201,7 +235,7 @@ export function AuthProvider({ children }) {
     }
     leaveGuest();
     return { ok: true };
-  }, [loadProfile]);
+  }, [loadProfile, describeAuthError]);
 
   /* ---- sign in ---- */
   const signIn = useCallback(async ({ email, password }) => {
@@ -230,12 +264,13 @@ export function AuthProvider({ children }) {
     });
 
     if (err) {
-      setError(err.message);
-      return { ok: false, error: err.message };
+      const msg = describeAuthError(err);
+      setError(msg);
+      return { ok: false, error: msg };
     }
     leaveGuest();
     return { ok: true };
-  }, [loadProfile]);
+  }, [loadProfile, describeAuthError]);
 
   /* ---- guest mode ----
      Study without an account. Progress is written to this device only; the
@@ -278,9 +313,9 @@ export function AuthProvider({ children }) {
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/#reset`,
     });
-    if (err) return { ok: false, error: err.message };
+    if (err) return { ok: false, error: describeAuthError(err) };
     return { ok: true };
-  }, []);
+  }, [describeAuthError]);
 
   /* ---- subscription ---- */
   const subscription = useMemo(() => {

@@ -89,7 +89,7 @@ const COMING = {
 };
 
 export default function InstructorPortal({ onExitRole }) {
-  const { user, isSignedIn } = useAuth();
+  const { user } = useAuth();
   const [section, setSection] = useState("dashboard");
   const [registering, setRegistering] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -178,7 +178,6 @@ export default function InstructorPortal({ onExitRole }) {
               status={status}
               profile={profile}
               draft={draft}
-              isSignedIn={isSignedIn}
               onRegister={() => setRegistering(true)}
             />
           )
@@ -195,7 +194,7 @@ export default function InstructorPortal({ onExitRole }) {
    exist — which is the truthful state, not a broken one, so each tile says
    what it counts rather than just showing a bare 0.
    --------------------------------------------------------------------------- */
-function InstructorDashboard({ loading, status, profile, draft, isSignedIn, onRegister }) {
+function InstructorDashboard({ loading, status, profile, draft, onRegister }) {
   return (
     <>
       {loading
@@ -204,7 +203,6 @@ function InstructorDashboard({ loading, status, profile, draft, isSignedIn, onRe
             status={status}
             profile={profile}
             draft={draft}
-            isSignedIn={isSignedIn}
             onRegister={onRegister}
           />}
 
@@ -264,44 +262,23 @@ function InstructorDashboard({ loading, status, profile, draft, isSignedIn, onRe
    instructor is invisible to every learner, and should be told exactly that
    rather than left to wonder why no bookings arrive.
    --------------------------------------------------------------------------- */
-function VerificationCard({ status, profile, draft, isSignedIn, onRegister }) {
+function VerificationCard({ status, profile, draft, onRegister }) {
   /* Not started */
   if (!status) {
     return (
       <Panel tone="blue" icon={ShieldCheck} title="Get verified to take bookings">
         <p>
-          Register as an instructor and we'll check your ADI number against the
-          RSA register. Until that's done your profile isn't visible to
-          learners — which is the point: it's what the badge means.
+          Add your ADI number and we'll check it against the RSA register.
+          Until that's done your profile isn't visible to learners — which is
+          the point: it's what the badge means.
         </p>
-        {!isSignedIn && (
-          <p className="text-slate-500 dark:text-slate-400">
-            You can fill this in now; you'll need an account to submit it.
-          </p>
-        )}
+        <p className="text-slate-500 dark:text-slate-400">
+          It's about ten fields and you don't have to do them in one go — every
+          step is saved as you fill it in.
+        </p>
         <div className="mt-4">
-          <PrimaryButton onClick={onRegister}>Register as an instructor</PrimaryButton>
+          <PrimaryButton onClick={onRegister}>Add my details</PrimaryButton>
         </div>
-
-        {/* The portal is readable signed out on purpose — an instructor
-            deciding whether to join shouldn't have to make an account to see
-            what they'd be joining. But then "you'll need an account" has to
-            point somewhere, or it's just a closed door with a sign on it.
-            Plain links, not router pushes: these are real addresses, and the
-            landing page offers the same two. */}
-        {!isSignedIn && (
-          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-            <a href="/adi/signin"
-               className="font-bold text-blue-600 dark:text-blue-400 hover:underline">
-              Sign in
-            </a>
-            {" or "}
-            <a href="/adi/signup"
-               className="font-bold text-blue-600 dark:text-blue-400 hover:underline">
-              create an instructor account
-            </a>.
-          </p>
-        )}
       </Panel>
     );
   }

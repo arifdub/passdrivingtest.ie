@@ -663,12 +663,43 @@ function StudentRoute() {
 
 function InstructorRoute() {
   const { claimRole } = usePlatform();
+  const { loading, isSignedIn } = useAuth();
 
   /* Same as the student side: record the door they came through so /app
      knows where to send them next time — but only if they hadn't already
      picked one. A learner who taps "For instructors" on the front door to
      see what it is must not have their app switched out from under them. */
   useEffect(() => { claimRole("instructor"); }, [claimRole]);
+
+  if (loading) return <Splash />;
+
+  /* THE PORTAL BEGINS AT THE DOOR
+
+     This used to render signed out, on the reasoning that an ADI deciding
+     whether to join shouldn't need an account to see what they'd be joining.
+     The landing page already does that job, and better: it is the page that
+     explains the platform, and it is the one that gets indexed. What the
+     portal showed a signed-out visitor was a dashboard they couldn't use and
+     a registration form that couldn't be submitted.
+
+     So the account comes first, and it asks for almost nothing: an email and
+     a password. The ADI number, areas, lesson types and rates are a dozen
+     fields that nobody fills in between lessons, and they are now asked for
+     inside the portal, whenever it suits — saved as a draft at every step,
+     and submitted for verification when it's done. Registering and getting
+     verified are two different days.
+
+     isSignedIn, not hasAccess: guest mode is a learner's affordance and has
+     no meaning here. */
+  if (!isSignedIn) {
+    return (
+      <AuthScreen
+        audience="instructor"
+        allowGuest={false}
+        onBack={() => { window.location.href = "/"; }}
+      />
+    );
+  }
 
   return (
     <InstructorPortal
