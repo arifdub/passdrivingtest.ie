@@ -68,6 +68,15 @@ security definer
 set search_path = public
 as $$
 begin
+  -- Trigger 3 refuses every role change that isn't server-side, and this IS
+  -- the server side — but it runs inside the sign-up request, where
+  -- auth.role() reads 'anon', so it would otherwise be refused by its own
+  -- guard and sign-up would fail for every instructor. The flag says "this
+  -- write is mine". `true` makes it local to this transaction, and there is
+  -- no way to set it from the browser: PostgREST exposes tables and the
+  -- functions you publish, not arbitrary SQL.
+  perform set_config('pdt.applying_signup_role', 'on', true);
+
   begin
     insert into public.profiles (id) values (new.id) on conflict (id) do nothing;
   exception when others then
@@ -81,6 +90,7 @@ begin
    where id = new.id
      and role not in ('admin', 'super_admin');
 
+  perform set_config('pdt.applying_signup_role', 'off', true);
   return new;
 end $$;
 
@@ -111,6 +121,11 @@ begin
   -- editor, a migration, an Edge Function with the service key. Those are the
   -- trusted callers and the only route to an elevated role.
   if coalesce(auth.role(), 'service_role') = 'service_role' then
+    return new;
+  end if;
+
+  -- The sign-up trigger above, writing the role it was given. See its comment.
+  if coalesce(current_setting('pdt.applying_signup_role', true), 'off') = 'on' then
     return new;
   end if;
 
@@ -145,10 +160,17 @@ create trigger profiles_enforce_role
 -- arrived. Anyone who got as far as starting an instructor profile is an
 -- instructor; that is evidence, not a guess.
 -- ---------------------------------------------------------------------------
-update public.profiles p
-   set role = 'instructor'
- where p.role = 'student'
-   and exists (select 1 from public.instructor_profiles i where i.user_id = p.id);
+-- Guarded, because instructor_profiles arrives with sql/04 and this file must
+-- not fail for anyone who runs them out of order or hasn't run that one yet.
+do $$
+begin
+  if to_regclass('public.instructor_profiles') is not null then
+    update public.profiles p
+       set role = 'instructor'
+     where p.role = 'student'
+       and exists (select 1 from public.instructor_profiles i where i.user_id = p.id);
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 5. Changing a role by hand
