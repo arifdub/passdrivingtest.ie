@@ -216,17 +216,24 @@ export function PlatformProvider({ children }) {
     if (syncedFor.current === user.id) return;
     syncedFor.current = user.id;
 
+    /* journey_stage only. The role used to be pushed up here too, and that
+       was the hole: it meant the device told the account which product the
+       person was, so opening the other portal once rewrote it. The role is
+       now set when the account is created, from the door used, and the
+       database refuses to let a browser change it (sql/05). */
     const patch = {};
-    if (role) patch.role = role;
     if (journeyStage) patch.journey_stage = journeyStage;
     if (Object.keys(patch).length) pushToAccount(patch);
   }, [isSignedIn, user?.id, role, journeyStage, pushToAccount]);
 
+  /* Local only, on purpose. For a signed-out visitor this is the whole story:
+     which door they came in by, so their installed app reopens on the right
+     side. For a signed-in one the account's role overrules it everywhere that
+     matters — see accountRole below. */
   const setRole = useCallback((next) => {
     setRoleState(next);
     writeLocal(ROLE_KEY, next);
-    if (next) pushToAccount({ role: next });
-  }, [pushToAccount]);
+  }, []);
 
   const setJourneyStage = useCallback((next) => {
     setStageState(next);
@@ -260,8 +267,35 @@ export function PlatformProvider({ children }) {
     setRole(next);
   }, [role, setRole]);
 
+  /* ---------------------------------------------------------------------
+     THE ACCOUNT'S ROLE, WHICH IS THE ONE THAT DECIDES ANYTHING
+
+     `role` above is the device's idea, kept in localStorage: useful before
+     anyone signs in, and worth exactly nothing as a permission, because the
+     browser owns it and anyone can edit it.
+
+     accountRole is what the database says about this account. A learner and
+     an instructor are different products now — the instructor side will show
+     learners' phone numbers and addresses as soon as bookings exist, and a
+     learner's progress is theirs — so which one an account may open is a
+     question only the server gets to answer.
+
+     An admin opens both. That is the point of an admin.
+     --------------------------------------------------------------------- */
+  const accountRole =
+    isSignedIn && profile?.role && ROLES.includes(profile.role) ? profile.role : null;
+
+  const isAdminAccount = accountRole === "admin" || accountRole === "super_admin";
+
   const value = useMemo(() => ({
     role,
+    accountRole,
+    isAdminAccount,
+    /* Not signed in: the student side is open to guests, which is how the
+       free study material has always worked. The instructor side has its own
+       sign-in gate and never reaches these. */
+    mayUseStudent: !accountRole || accountRole === "student" || isAdminAccount,
+    mayUseInstructor: accountRole === "instructor" || isAdminAccount,
     journeyStage,
     stage: journeyStage ? STAGE_BY_ID[journeyStage] || null : null,
     isStudent: role === "student",
@@ -272,7 +306,8 @@ export function PlatformProvider({ children }) {
     claimRole,
     setJourneyStage,
     clearRole,
-  }), [role, journeyStage, setRole, claimRole, setJourneyStage, clearRole]);
+  }), [role, accountRole, isAdminAccount, journeyStage, setRole, claimRole,
+       setJourneyStage, clearRole]);
 
   return (
     <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>

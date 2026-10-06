@@ -85,6 +85,10 @@ export function AuthProvider({ children }) {
         id: u.id,
         email: u.email,
         full_name: u.full_name || "",
+        /* Local mode stands in for the database, so it has to stand in for
+           the role too — otherwise the one thing that cannot be tested
+           without Supabase is the thing most worth testing. */
+        role: u.role || "student",
         subscription_status: "active",
         subscription_plan: "free-access",
       });
@@ -199,8 +203,14 @@ export function AuthProvider({ children }) {
     return raw;
   }, []);
 
-  const signUp = useCallback(async ({ email, password, fullName }) => {
+  /* `role` is which door they registered at: 'student' or 'instructor'. It
+     travels in the sign-up metadata and the database decides what to do with
+     it (sql/05) — the browser states where it came from, it does not grant
+     itself anything. Anything other than 'instructor' lands as 'student',
+     there and here. */
+  const signUp = useCallback(async ({ email, password, fullName, role }) => {
     setError(null);
+    const signupRole = role === "instructor" ? "instructor" : "student";
 
     if (!HAS_SUPABASE) {
       const users = readLocal(LOCAL_USERS_KEY, {});
@@ -210,7 +220,7 @@ export function AuthProvider({ children }) {
         setError(msg);
         return { ok: false, error: msg };
       }
-      const u = { id: localUserId(email), email: key, full_name: fullName || "" };
+      const u = { id: localUserId(email), email: key, full_name: fullName || "", role: signupRole };
       users[key] = { ...u, password };
       writeLocal(LOCAL_USERS_KEY, users);
       writeLocal(LOCAL_SESSION_KEY, u);
@@ -223,7 +233,7 @@ export function AuthProvider({ children }) {
     const { data, error: err } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName || "" } },
+      options: { data: { full_name: fullName || "", role: signupRole } },
     });
 
     if (err) {
@@ -254,7 +264,7 @@ export function AuthProvider({ children }) {
         setError(msg);
         return { ok: false, error: msg };
       }
-      const u = { id: found.id, email: found.email, full_name: found.full_name };
+      const u = { id: found.id, email: found.email, full_name: found.full_name, role: found.role || "student" };
       writeLocal(LOCAL_SESSION_KEY, u);
       leaveGuest();
       setUser(u);

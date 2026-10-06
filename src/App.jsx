@@ -31,7 +31,7 @@ import {
   Home as HomeIcon, BookOpen, Timer, TrendingUp, User, Loader2, Lock,
   /* Aliased: react-router exports a <Route> too, and the collision is a
      build error, not a warning. */
-  Settings as SettingsIcon, Route as RouteIcon,
+  Settings as SettingsIcon, Route as RouteIcon, ArrowRight,
 } from "lucide-react";
 import { AuthProvider, useAuth } from "./appAuth";
 import { PlatformProvider, usePlatform } from "./platform";
@@ -49,7 +49,7 @@ import FlashcardPlayer from "./FlashcardPlayer";
 import { SECTION_BY_ID, buildMockTest } from "./theorySections";
 import { MOCKS, MOCK_BY_ID, DECK_BY_ID, PASS_MARK, lockedForGuest } from "./appStructure";
 import { getDeck } from "./contentSources";
-import { EmptyState } from "./ui";
+import { EmptyState, Logo } from "./ui";
 
 /* The tab ids double as screen ids, so a tab's id must not collide with a
    screen that means something else. "mocks" (the list) is deliberately not
@@ -605,6 +605,75 @@ function InstructorAuthRoute({ view }) {
   );
 }
 
+/* ---------------------------------------------------------------------------
+   WRONG DOOR
+
+   A learner's account at /adi, or an instructor's at /student.
+
+   NOT AN ERROR SCREEN. Nobody did anything wrong: they have one email address
+   and two products now exist behind it. The useful thing is to say which side
+   this account belongs to and put them on it in one tap, rather than a refusal
+   that leaves them wondering whether the password was wrong.
+
+   Signing out is offered beside it, because the other likely truth is that
+   they meant to use a different account.
+   --------------------------------------------------------------------------- */
+function WrongDoor({ accountRole }) {
+  const { signOut, user } = useAuth();
+  const isInstructorAccount = accountRole === "instructor";
+
+  const here = isInstructorAccount ? "learner" : "instructor";
+  const theirs = isInstructorAccount ? "instructor" : "learner";
+  const go = isInstructorAccount ? "/adi" : "/student";
+
+  return (
+    <div
+      className="min-h-screen bg-slate-900 flex flex-col items-center justify-center px-5"
+      style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}
+    >
+      <div className="w-full max-w-sm">
+        <Logo size="md" className="mx-auto" />
+
+        <div className="mt-7 bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
+          <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
+            This is your {theirs} account
+          </h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            {user?.email ? <strong>{user.email}</strong> : "This account"} was
+            registered on the {theirs} side, so it opens the {theirs} portal —
+            not the {here} one.
+          </p>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+            The two are separate on purpose. If you want both, register a second
+            account from the {here} door with a different email.
+          </p>
+
+          <a
+            href={go}
+            className="mt-5 w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold py-3 rounded-xl transition"
+          >
+            Go to my {theirs} portal <ArrowRight size={16} />
+          </a>
+
+          <button
+            onClick={signOut}
+            className="mt-2 w-full text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 py-2.5"
+          >
+            Sign out and use a different account
+          </button>
+        </div>
+
+        <button
+          onClick={() => { window.location.href = "/"; }}
+          className="mt-3 w-full text-sm font-semibold text-slate-400 hover:text-emerald-400 py-2.5"
+        >
+          Back to passdrivingtest.ie
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StudentOnboardingRoute() {
   const { setJourneyStage } = usePlatform();
   const { isSignedIn, continueAsGuest } = useAuth();
@@ -641,7 +710,8 @@ function StudentOnboardingRoute() {
 }
 
 function StudentRoute() {
-  const { journeyStage, claimRole } = usePlatform();
+  const { journeyStage, claimRole, accountRole, mayUseStudent } = usePlatform();
+  const { loading } = useAuth();
 
   /* Arriving at /student is the answer to "which are you?", the same way
      /adi is. Most learners now come straight from the landing page and never
@@ -653,6 +723,12 @@ function StudentRoute() {
      already made. See platform.jsx. */
   useEffect(() => { claimRole("student"); }, [claimRole]);
 
+  if (loading) return <Splash />;
+
+  /* An instructor's account does not open the learner's app. See platform.jsx
+     — this reads the role the database holds, not the one on the device. */
+  if (!mayUseStudent) return <WrongDoor accountRole={accountRole} />;
+
   /* Someone who chose "student" but never answered the journey question —
      including everyone who was already using the app before the platform
      split — is asked once, then never again. */
@@ -662,7 +738,7 @@ function StudentRoute() {
 }
 
 function InstructorRoute() {
-  const { claimRole } = usePlatform();
+  const { claimRole, accountRole, mayUseInstructor } = usePlatform();
   const { loading, isSignedIn } = useAuth();
 
   /* Same as the student side: record the door they came through so /app
@@ -700,6 +776,9 @@ function InstructorRoute() {
       />
     );
   }
+
+  /* Signed in, but with a learner's account. */
+  if (!mayUseInstructor) return <WrongDoor accountRole={accountRole} />;
 
   return (
     <InstructorPortal

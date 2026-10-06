@@ -108,8 +108,12 @@ export default function AuthScreen({
     }
 
     setBusy(true);
+    /* The door is the answer to "which of the two are you?" — recorded on the
+       account at the moment it is created, and not editable from the browser
+       afterwards (sql/05). It is the only honest signal available: nobody
+       registers as a driving instructor by accident. */
     const result = isSignup
-      ? await signUp({ email, password, fullName })
+      ? await signUp({ email, password, fullName, role: audience })
       : await signIn({ email, password });
     setBusy(false);
 
