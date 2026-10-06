@@ -282,6 +282,26 @@ function VerificationCard({ status, profile, draft, isSignedIn, onRegister }) {
         <div className="mt-4">
           <PrimaryButton onClick={onRegister}>Register as an instructor</PrimaryButton>
         </div>
+
+        {/* The portal is readable signed out on purpose — an instructor
+            deciding whether to join shouldn't have to make an account to see
+            what they'd be joining. But then "you'll need an account" has to
+            point somewhere, or it's just a closed door with a sign on it.
+            Plain links, not router pushes: these are real addresses, and the
+            landing page offers the same two. */}
+        {!isSignedIn && (
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+            <a href="/adi/signin"
+               className="font-bold text-blue-600 dark:text-blue-400 hover:underline">
+              Sign in
+            </a>
+            {" or "}
+            <a href="/adi/signup"
+               className="font-bold text-blue-600 dark:text-blue-400 hover:underline">
+              create an instructor account
+            </a>.
+          </p>
+        )}
       </Panel>
     );
   }

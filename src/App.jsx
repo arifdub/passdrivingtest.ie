@@ -467,17 +467,19 @@ class ErrorBoundary extends React.Component {
    allowed into it are exactly as they were. It simply sits under /student now
    rather than being the whole application.
    =========================================================================== */
+function Splash() {
+  return (
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-3">
+      <Loader2 size={28} className="text-emerald-400 animate-spin" />
+      <p className="text-sm text-slate-400">Loading…</p>
+    </div>
+  );
+}
+
 function StudentGate() {
   const { loading, hasAccess } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-3">
-        <Loader2 size={28} className="text-emerald-400 animate-spin" />
-        <p className="text-sm text-slate-400">Loading…</p>
-      </div>
-    );
-  }
+  if (loading) return <Splash />;
 
   if (!hasAccess) return <AuthScreen />;
 
@@ -530,6 +532,75 @@ function LegacyEntry() {
         setRole(role);
         navigate(role === "instructor" ? "/adi" : "/student/onboarding");
       }}
+    />
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   SIGN IN AND SIGN UP, AS ADDRESSES
+
+   /student/signin  /student/signup  /adi/signin  /adi/signup
+
+   WHY THESE ARE SEPARATE ROUTES AND NOT A QUERY STRING
+
+   The landing page offers four of them — sign in and sign up, for learners
+   and for instructors — and each needs to land on the form itself. Three
+   things make that impossible through /student alone:
+
+     · /student redirects anyone without a journey stage to the onboarding
+       question. Correct for a learner starting out, wrong for someone who
+       already has an account and is trying to get back into it — they'd be
+       asked where they're up to before being allowed to prove who they are.
+     · /student's gate hands guests straight through, so a guest tapping
+       "Sign in" would land back in the app they were already in, with no
+       form in sight.
+     · /adi doesn't gate on auth at all. The portal is readable while signed
+       out by design, so "Sign in" there has nowhere to point.
+
+   A returning user is sent on as soon as they're signed in, so these
+   addresses are never a dead end if they're bookmarked.
+   --------------------------------------------------------------------------- */
+function StudentAuthRoute({ view }) {
+  const { claimRole } = usePlatform();
+  const { loading, isSignedIn } = useAuth();
+
+  /* Same as /student: the door they came through is their answer to "which
+     are you?". claimRole never overwrites a choice already made. */
+  useEffect(() => { claimRole("student"); }, [claimRole]);
+
+  if (loading) return <Splash />;
+
+  /* isSignedIn, not hasAccess: a guest asking to sign in must get the form,
+     not be waved through on the access they already had. */
+  if (isSignedIn) return <Navigate to="/student" replace />;
+
+  return (
+    <AuthScreen
+      audience="student"
+      initialView={view}
+      onBack={() => { window.location.href = "/"; }}
+    />
+  );
+}
+
+function InstructorAuthRoute({ view }) {
+  const { claimRole } = usePlatform();
+  const { loading, isSignedIn } = useAuth();
+
+  useEffect(() => { claimRole("instructor"); }, [claimRole]);
+
+  if (loading) return <Splash />;
+  if (isSignedIn) return <Navigate to="/adi" replace />;
+
+  return (
+    <AuthScreen
+      audience="instructor"
+      initialView={view}
+      /* No guest mode here. Guest exists so a learner can try the questions
+         before giving an email; an instructor has nothing to try — the one
+         thing registration does needs an account to submit against. */
+      allowGuest={false}
+      onBack={() => { window.location.href = "/"; }}
     />
   );
 }
@@ -629,8 +700,13 @@ export default function App() {
                 the router matches real, top-level paths. */}
             <BrowserRouter>
               <Routes>
+                <Route path="/student/signin" element={<StudentAuthRoute view="login" />} />
+                <Route path="/student/signup" element={<StudentAuthRoute view="signup" />} />
                 <Route path="/student/onboarding" element={<StudentOnboardingRoute />} />
                 <Route path="/student/*" element={<StudentRoute />} />
+
+                <Route path="/adi/signin" element={<InstructorAuthRoute view="login" />} />
+                <Route path="/adi/signup" element={<InstructorAuthRoute view="signup" />} />
                 <Route path="/adi/*" element={<InstructorRoute />} />
                 <Route path="/admin/*" element={<AdminPortal />} />
 

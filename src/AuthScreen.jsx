@@ -12,6 +12,27 @@
 
   The welcome panel collapses once the form is open, so the screen doesn't
   become a scroll on a small phone.
+
+  TWO AUDIENCES, ONE FORM
+
+  The landing page links straight to sign-in and sign-up for learners AND for
+  instructors, so this screen is now also the instructor's front door. The
+  fields are identical — it's one auth system, one accounts table — but three
+  things are not:
+
+    · the copy, because "your progress follows you to any device" is a
+      learner's reason to sign up and means nothing to an ADI;
+    · guest mode, which exists so a learner can try the questions before
+      handing over an email. There is nothing for an instructor to try as a
+      guest — registration needs an account to submit — so it's hidden
+      rather than offered and then refused;
+    · the deep-linked view. Arriving at /student/signin means "show me the
+      login form", not "show me a welcome panel with a login button on it".
+      When the view was deep-linked there is no welcome panel behind it, so
+      Back leaves for the landing page instead of revealing one.
+
+  Defaults reproduce the original screen exactly, which is what the student
+  app gate still renders.
   ===========================================================================
 */
 
@@ -25,10 +46,15 @@ import { useAuth } from "./appAuth";
 import { TOTAL_QUESTIONS } from "./theorySections";
 import InstallPopup from "./InstallPopup";
 
-export default function AuthScreen() {
+export default function AuthScreen({
+  audience = "student",          // student | instructor
+  initialView = "welcome",       // welcome | login | signup
+  allowGuest = true,
+  onBack = null,                 // where Back goes when there's no welcome panel
+}) {
   const { signIn, signUp, resetPassword, continueAsGuest, mode } = useAuth();
 
-  const [view, setView] = useState("welcome");   // welcome | login | signup
+  const [view, setView] = useState(initialView);   // welcome | login | signup
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,6 +65,31 @@ export default function AuthScreen() {
 
   const isSignup = view === "signup";
   const isWelcome = view === "welcome";
+  const isInstructor = audience === "instructor";
+
+  /* Was there a welcome panel before this form, or did a link drop them
+     straight onto it? Decides what Back means. */
+  const hasWelcomeBehind = initialView === "welcome";
+
+  const copy = isInstructor
+    ? {
+        signupTitle: "Create your instructor account",
+        signupBlurb: "You'll need an account to submit your ADI number for checking.",
+        loginTitle: "Welcome back",
+        loginBlurb: "Sign in to your instructor dashboard.",
+      }
+    : {
+        signupTitle: "Create your account",
+        signupBlurb: "Your progress is saved and follows you to any device.",
+        loginTitle: "Welcome back",
+        loginBlurb: "Sign in to pick up where you left off.",
+      };
+
+  function handleBack() {
+    if (hasWelcomeBehind) { setView("welcome"); setMessage(null); return; }
+    if (onBack) { onBack(); return; }
+    window.location.href = "/";
+  }
 
   async function handleSubmit() {
     setMessage(null);
@@ -139,18 +190,22 @@ export default function AuthScreen() {
               >
                 I already have an account
               </button>
-              <button
-                onClick={continueAsGuest}
-                className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-emerald-400 font-bold py-3 transition"
-              >
-                Continue as guest <ArrowRight size={16} />
-              </button>
+              {allowGuest && (
+                <button
+                  onClick={continueAsGuest}
+                  className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-emerald-400 font-bold py-3 transition"
+                >
+                  Continue as guest <ArrowRight size={16} />
+                </button>
+              )}
             </div>
 
-            <p className="mt-3 text-xs text-slate-500 text-center leading-relaxed">
-              As a guest your progress saves on this device only. You can create
-              an account later and keep everything you've done.
-            </p>
+            {allowGuest && (
+              <p className="mt-3 text-xs text-slate-500 text-center leading-relaxed">
+                As a guest your progress saves on this device only. You can create
+                an account later and keep everything you've done.
+              </p>
+            )}
 
             <InstallPopup />
           </>
@@ -158,12 +213,10 @@ export default function AuthScreen() {
           <>
             <div className="mt-6 w-full bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
               <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
-                {isSignup ? "Create your account" : "Welcome back"}
+                {isSignup ? copy.signupTitle : copy.loginTitle}
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {isSignup
-                  ? "Your progress is saved and follows you to any device."
-                  : "Sign in to pick up where you left off."}
+                {isSignup ? copy.signupBlurb : copy.loginBlurb}
               </p>
 
               <div className="mt-5 space-y-3">
@@ -249,25 +302,29 @@ export default function AuthScreen() {
             </div>
 
             <div className="mt-5 w-full space-y-1">
+              {allowGuest && (
+                <button
+                  onClick={continueAsGuest}
+                  className="w-full flex items-center justify-center gap-2 border border-slate-600 hover:border-slate-500 text-white font-bold py-3 rounded-xl transition"
+                >
+                  Continue as guest <ArrowRight size={16} />
+                </button>
+              )}
               <button
-                onClick={continueAsGuest}
-                className="w-full flex items-center justify-center gap-2 border border-slate-600 hover:border-slate-500 text-white font-bold py-3 rounded-xl transition"
-              >
-                Continue as guest <ArrowRight size={16} />
-              </button>
-              <button
-                onClick={() => { setView("welcome"); setMessage(null); }}
+                onClick={handleBack}
                 className="w-full text-sm font-semibold text-slate-400 hover:text-emerald-400 py-2.5"
               >
-                Back
+                {hasWelcomeBehind ? "Back" : "Back to passdrivingtest.ie"}
               </button>
             </div>
           </>
         )}
 
-        <p className="mt-6 text-xs text-slate-500 text-center">
-          Full access to all study material — no payment required.
-        </p>
+        {!isInstructor && (
+          <p className="mt-6 text-xs text-slate-500 text-center">
+            Full access to all study material — no payment required.
+          </p>
+        )}
 
         {mode === "local" && (
           <p className="mt-3 text-[11px] text-amber-400/80 text-center leading-relaxed">
