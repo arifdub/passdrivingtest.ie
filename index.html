@@ -128,24 +128,75 @@ p{margin:0 0 .9em; text-wrap:pretty}
 a{color:var(--blue-d)}
 .wrap{max-width:var(--wrap); margin:0 auto; padding:0 20px}
 
-/* ---- header ---- */
-header{background:var(--ink); color:#fff}
+/* ---- header / navigation bar ----
+   Sticky, because it is the only navigation on the page: whatever someone
+   has scrolled past, both doors and both sign-ins stay one tap away. The
+   hero below is the same ink colour, so there is no visible seam at the top
+   of the page — it reads as one block until you scroll. */
+header{background:var(--ink); color:#fff; position:sticky; top:0; z-index:30}
 header .wrap{display:flex; align-items:center; gap:16px; padding-top:14px; padding-bottom:14px}
 header img{height:38px; width:auto; display:block}
 .brand{display:flex; align-items:center; gap:10px; text-decoration:none; color:#fff; font-weight:800; letter-spacing:-.02em}
 .brand span i{font-style:normal; color:#60a5fa}
-header nav{margin-left:auto; display:flex; gap:18px; align-items:center; font-size:15px}
-header nav a{color:#cbd5e1; text-decoration:none; font-weight:600}
+header nav{margin-left:auto; display:flex; gap:18px; align-items:center; font-size:15px; flex-wrap:wrap}
+header nav a{color:#cbd5e1; text-decoration:none; font-weight:600; white-space:nowrap}
 header nav a:hover{color:#fff}
 @media(max-width:620px){ .hide-sm{display:none} }
+/* Anything the nav links to sits under a sticky bar unless told otherwise. */
+[id]{scroll-margin-top:84px}
+
+/* ---- the sign-in menu ----
+   Two audiences means two sign-ins and two sign-ups, and a header has no way
+   of knowing which of the four a visitor wants. Rather than guess, or send
+   them down the page to look, the bar carries all four behind one control.
+
+   It's a <details>, so it opens, closes and takes keyboard focus with no
+   JavaScript at all — the script at the foot of this page only adds closing
+   on Escape and on a click elsewhere, and the menu still works without it. */
+.menu{position:relative}
+.menu summary{
+  list-style:none; cursor:pointer; color:#cbd5e1; font-weight:700;
+  display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+  border:1px solid #334155; border-radius:9px; padding:7px 13px;
+}
+.menu summary::-webkit-details-marker{display:none}
+.menu summary::after{content:"▾"; font-size:11px; opacity:.75}
+.menu[open] summary::after{content:"▴"}
+.menu summary:hover,
+.menu[open] summary{color:#fff; border-color:#64748b}
+.menu-panel{
+  position:absolute; right:0; top:calc(100% + 9px); z-index:20;
+  background:var(--card); border:1px solid var(--line); border-radius:14px;
+  box-shadow:0 16px 40px rgba(2,8,23,.32);
+  padding:9px; min-width:230px;
+}
+.menu-label{
+  margin:7px 10px 3px; font-size:11px; font-weight:800; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted);
+}
+.menu-panel a{
+  display:block; padding:9px 10px; border-radius:9px; font-size:15px;
+  color:var(--ink); font-weight:600; text-decoration:none; white-space:nowrap;
+}
+.menu-panel a:hover{background:var(--bg-2); color:var(--blue-d)}
+.menu-panel hr{border:0; border-top:1px solid var(--line); margin:8px 4px}
+
 /* Flex items don't wrap unless told to, so on a narrow phone the brand and
-   the two nav links simply ran off the side of the page and it could be
-   dragged horizontally. Below 480px the nav drops onto its own line instead.
-   Both links stay: "Instructors" is one of the two doors and hiding it to
-   save a row would defeat the point of the page. */
+   the nav links simply ran off the side of the page and it could be dragged
+   horizontally. Below 480px the nav drops onto its own line, and wraps
+   within that line rather than hiding a door to save a row. */
 @media(max-width:480px){
   header .wrap{flex-wrap:wrap; row-gap:10px}
-  header nav{margin-left:0; width:100%; gap:18px}
+  header nav{margin-left:0; width:100%; gap:12px; row-gap:10px; font-size:14.5px}
+
+  /* On a phone the nav wraps onto its own row and the menu button can end up
+     near the left edge. Anchored to the button, the panel then opened
+     leftwards off the side of the screen — at 320px it started 101px outside
+     the viewport, so half of it was unreachable. Dropping .menu out of the
+     positioning chain hands the panel to the sticky header instead, and it
+     spans the page gutters: predictable, and always on screen. */
+  .menu{position:static}
+  .menu-panel{left:20px; right:20px; min-width:0; top:calc(100% + 6px)}
 }
 
 /* ---- hero ---- */
@@ -253,12 +304,22 @@ footer li{margin-bottom:8px}
       <span>Pass<i>Driving</i>Test<i>.ie</i></span>
     </a>
     <nav>
-      <a class="hide-sm" href="/driver-theory-test/">Theory test guide</a>
-      <a href="/adi">Instructors</a>
-      <!-- Not /student/signin: there are two sign-ins now, and the header has
-           no way of knowing which one this person wants. It jumps to the two
-           cards, where each side's own sign in and sign up sit under it. -->
-      <a href="#sign-in">Sign in</a>
+      <a href="/student">For learners</a>
+      <a href="/adi">For instructors</a>
+      <a class="hide-sm" href="/driver-theory-test/">Theory guide</a>
+
+      <details class="menu">
+        <summary>Sign in</summary>
+        <div class="menu-panel">
+          <p class="menu-label">Learners</p>
+          <a href="/student/signin">Sign in</a>
+          <a href="/student/signup">Create an account</a>
+          <hr>
+          <p class="menu-label">Instructors</p>
+          <a href="/adi/signin">Sign in</a>
+          <a href="/adi/signup">Create an account</a>
+        </div>
+      </details>
     </nav>
   </div>
 </header>
@@ -438,6 +499,30 @@ footer li{margin-bottom:8px}
     </div>
   </div>
 </footer>
+
+<script>
+/* The sign-in menu opens and closes by itself — that's what <details> is for,
+   and it's why this page still needs no framework. What <details> doesn't do
+   is close when you click somewhere else or press Escape, and a menu that can
+   only be dismissed by hitting the same button again feels stuck. This adds
+   those two. If it never runs, the menu still opens and still closes. */
+(function () {
+  var menu = document.querySelector(".menu");
+  if (!menu) return;
+
+  document.addEventListener("click", function (e) {
+    if (menu.open && !menu.contains(e.target)) menu.open = false;
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && menu.open) {
+      menu.open = false;
+      var s = menu.querySelector("summary");
+      if (s) s.focus();
+    }
+  });
+})();
+</script>
 
 <script type="application/ld+json">
 {
