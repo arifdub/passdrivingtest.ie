@@ -27,16 +27,18 @@
   ===========================================================================
 */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard, Users, BadgeCheck, CalendarCheck, CreditCard, Store,
   Star, AlertTriangle, BarChart3, Settings, ShieldAlert, Hammer,
+  Check, X, HelpCircle, RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
 import { Logo, EmptyState, PrimaryButton, AccountMenu } from "../ui";
 import AuthScreen from "../AuthScreen";
 import InstructorReview from "./InstructorReview";
+import { checkSetup } from "./setupStatus";
 
 const SECTIONS = [
   { id: "overview",    label: "Overview",    icon: LayoutDashboard },
@@ -201,49 +203,119 @@ function Overview() {
         </p>
       </div>
 
-      <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-        <h2 className="font-bold text-slate-900 dark:text-white">Before this goes live</h2>
-        <ul className="mt-3 space-y-2.5 text-sm text-slate-600 dark:text-slate-300">
-          <li className="flex gap-2.5">
-            <span className="text-emerald-500 font-black shrink-0">1</span>
-            <span>
-              Run <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">sql/RUN-PENDING.sql</code>,
-              which is <code className="text-xs">04</code> instructor profiles,
-              <code className="text-xs mx-1">05</code> account roles,
-              <code className="text-xs mx-1">06</code> the permission that lets
-              this screen verify anyone, and <code className="text-xs mx-1">07</code>
-              one account holding both sides — in the order they depend on each
-              other. It is one paste and safe to run twice.
+      <SetupChecklist />
+    </>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   SETUP
+
+   This replaced a hand-written list of migrations to run. That list never
+   checked anything, so it looked the same whether the work was outstanding or
+   finished weeks ago — and a permanent instruction sitting on a dashboard
+   stops reading as an instruction and starts reading as an error. It was
+   mistaken for one.
+
+   So it asks the database. When everything is in place it says one line and
+   gets out of the way; when something is missing it names which file, and
+   only that file.
+   --------------------------------------------------------------------------- */
+function SetupChecklist() {
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(true);
+
+  const refresh = useCallback(async () => {
+    setBusy(true);
+    setRows(await checkSetup());
+    setBusy(false);
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const missing = (rows || []).filter(r => r.state === "missing");
+  const unknown = (rows || []).filter(r => r.state === "unknown");
+  const settled = rows && missing.length === 0 && unknown.length === 0;
+
+  return (
+    <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="font-bold text-slate-900 dark:text-white">
+          {busy && !rows ? "Checking the database…"
+            : settled ? "Database is set up"
+            : missing.length ? `${missing.length} migration${missing.length > 1 ? "s" : ""} still to run`
+            : "Couldn't check the database"}
+        </h2>
+        <button
+          onClick={refresh}
+          aria-label="Re-check"
+          className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500"
+        >
+          <RefreshCw size={13} className={busy ? "animate-spin" : ""} />
+        </button>
+      </div>
+
+      {settled && (
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Everything this screen needs is in place. Nothing to run.
+        </p>
+      )}
+
+      <ul className="mt-3 space-y-2.5">
+        {(rows || []).map(r => (
+          <li key={r.id} className="flex gap-2.5 text-sm">
+            <span className="shrink-0 mt-0.5">
+              {r.state === "present" ? <Check size={16} className="text-emerald-500" />
+                : r.state === "missing" ? <X size={16} className="text-red-500" />
+                : <HelpCircle size={16} className="text-amber-500" />}
+            </span>
+            <span className="text-slate-600 dark:text-slate-300">
+              <strong className="text-slate-900 dark:text-white">{r.label}</strong>
+              <code className="ml-1.5 text-[11px] bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
+                sql/{r.id}
+              </code>
+              <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {r.state === "present" ? r.detail
+                  : r.state === "missing" ? `Not there yet — ${r.detail.toLowerCase()}`
+                  : r.note || "Couldn't tell."}
+              </span>
             </span>
           </li>
-          <li className="flex gap-2.5">
-            <span className="text-emerald-500 font-black shrink-0">2</span>
-            <span>
-              Promote your own account from the Supabase SQL editor — the only
-              route in, by design. This <em>adds</em> admin rather than
-              replacing what the account already is, so one email can be a
-              learner, an instructor and an admin:
-              <code className="block mt-1.5 text-xs bg-slate-100 dark:bg-slate-900 p-2 rounded overflow-x-auto whitespace-pre-wrap break-words">
+        ))}
+      </ul>
+
+      {missing.length > 0 && (
+        <p className="mt-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Run the matching file from <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">sql/</code> in
+          the Supabase SQL editor, or <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">sql/RUN-PENDING.sql</code> for
+          all of them at once. Every file is safe to run twice.
+        </p>
+      )}
+
+      {unknown.length > 0 && missing.length === 0 && (
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+          These may well be fine — the check itself failed, which is not the
+          same as the migration being missing.
+        </p>
+      )}
+
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-500 dark:text-slate-400">
+          Granting someone admin
+        </summary>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Only from the Supabase SQL editor, by design. This <em>adds</em> admin
+          rather than replacing what the account already is, so one email can be
+          a learner, an instructor and an admin. They need to sign out and back
+          in afterwards.
+        </p>
+        <code className="block mt-2 text-xs bg-slate-100 dark:bg-slate-900 p-2 rounded overflow-x-auto whitespace-pre-wrap break-words">
 {`update public.profiles
    set roles = array(select distinct unnest(roles || array['admin']))
- where id = (select id from auth.users where email = 'you@example.com');`}
-              </code>
-              Then sign out and back in — the roles are read when the session
-              loads.
-            </span>
-          </li>
-          <li className="flex gap-2.5">
-            <span className="text-emerald-500 font-black shrink-0">3</span>
-            <span>
-              Every action added here must be enforced again in RLS or a
-              trigger. This screen's check is a courtesy, not a boundary —
-              verifying an instructor is allowed by sql/06, and refused there
-              for anyone who isn't an admin, including on their own row.
-            </span>
-          </li>
-        </ul>
-      </div>
-    </>
+ where id = (select id from auth.users where email = 'them@example.com');`}
+        </code>
+      </details>
+    </div>
   );
 }
 
