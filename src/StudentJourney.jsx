@@ -50,7 +50,13 @@ const ICONS = {
 
 /* The stages that have something real behind them today. The rest are drawn
    as the road ahead rather than as features that are broken. */
-const BUILT = new Set(["theory", "mock"]);
+/* EDT joins these not because lessons are booked here — they are not — but
+   because the thing a learner needs at that point, finding a verified
+   instructor, now exists. */
+const BUILT = new Set(["theory", "mock", "edt"]);
+
+/* Which screen each built milestone opens. */
+const OPENS = { theory: "home", mock: "mocks", edt: "instructors" };
 
 export default function StudentJourney({ go, onChangeStage }) {
   const { isGuest } = useAuth();
@@ -176,7 +182,7 @@ function NextStep({ milestone, overall, mockReadiness, go }) {
       <div className="mt-4">
         {built ? (
           <PrimaryButton
-            onClick={() => go({ screen: milestone.id === "mock" ? "mocks" : "home" })}
+            onClick={() => go({ screen: OPENS[milestone.id] || "home" })}
           >
             {milestone.id === "mock" ? "Sit a mock test" : "Continue learning"}
           </PrimaryButton>
@@ -230,7 +236,7 @@ function MilestoneRow({ milestone, position, currentIndex, overall, mockReadines
     <button
       onClick={() => {
         if (!openable) return;
-        go({ screen: milestone.id === "mock" ? "mocks" : "home" });
+        go({ screen: OPENS[milestone.id] || "home" });
       }}
       disabled={!openable}
       className={`w-full text-left bg-white dark:bg-slate-800 border rounded-2xl p-4 transition ${

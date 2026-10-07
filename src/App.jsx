@@ -41,6 +41,7 @@ import AuthScreen from "./AuthScreen";
 import RoleEntry from "./RoleEntry";
 import StudentOnboarding from "./StudentOnboarding";
 import StudentJourney from "./StudentJourney";
+import FindInstructor from "./FindInstructor";
 import InstructorPortal from "./instructor/InstructorPortal";
 import AdminPortal from "./admin/AdminPortal";
 import { HomeScreen, MockHubScreen, ProgressScreen, ProfileScreen } from "./screens";
@@ -306,6 +307,12 @@ function CurrentScreen({ view, go, back, theme, toggleTheme }) {
         />
       );
     }
+
+    /* Where the two halves of the platform meet. Not a tab: a learner needs
+       it once, around EDT, not on every screen — and a sixth tab does not fit
+       a 320px phone. It is reached from the journey and from Home. */
+    case "instructors":
+      return <FindInstructor onBack={back} />;
 
     case "deck": {
       const deck = DECK_BY_ID[view.deckId];

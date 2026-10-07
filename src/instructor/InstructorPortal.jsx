@@ -31,6 +31,8 @@ import { Logo, EmptyState, PrimaryButton, SecondaryButton, AccountMenu } from ".
 import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
 import { portalsFor } from "../portals";
+import Enquiries from "./Enquiries";
+import { receivedEnquiries } from "../marketplace";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
 
@@ -40,6 +42,7 @@ const SECTIONS = [
   { id: "dashboard",    label: "Dashboard",    icon: LayoutDashboard },
   { id: "calendar",     label: "Calendar",     icon: Calendar },
   { id: "students",     label: "Students",     icon: Users },
+  { id: "enquiries",    label: "Enquiries",    icon: MessageSquare },
   { id: "bookings",     label: "Bookings",     icon: CalendarCheck },
   { id: "availability", label: "Availability", icon: Clock },
   { id: "marketplace",  label: "Marketplace",  icon: Store },
@@ -186,8 +189,10 @@ export default function InstructorPortal({ onExitRole }) {
               profile={profile}
               draft={draft}
               onRegister={() => setRegistering(true)}
+              onOpenEnquiries={() => setSection("enquiries")}
             />
           )
+          : section === "enquiries" ? <Enquiries />
           : <ComingSoon section={active} />}
       </div>
     </div>
@@ -201,7 +206,23 @@ export default function InstructorPortal({ onExitRole }) {
    exist — which is the truthful state, not a broken one, so each tile says
    what it counts rather than just showing a bare 0.
    --------------------------------------------------------------------------- */
-function InstructorDashboard({ loading, status, profile, draft, onRegister }) {
+function InstructorDashboard({ loading, status, profile, draft, onRegister, onOpenEnquiries }) {
+  const { user } = useAuth();
+  const [newEnquiries, setNewEnquiries] = useState(undefined);
+
+  /* Only worth asking once verified — nobody can find an unlisted instructor
+     to enquire with, so the answer is always zero and the failure when
+     sql/09 is missing would be noise on a screen that has nothing to do
+     with it. */
+  useEffect(() => {
+    let off = false;
+    if (status !== "verified" || !user?.id) return;
+    receivedEnquiries(user.id).then(({ rows }) => {
+      if (!off) setNewEnquiries(rows.filter(r => r.status === "new").length);
+    });
+    return () => { off = true; };
+  }, [status, user?.id]);
+
   return (
     <>
       {loading
@@ -217,7 +238,16 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister }) {
         <Stat label="Today's lessons" value="—" note="Nothing booked yet" />
         <Stat label="This week" value="—" note="Earnings once paid lessons run" />
         <Stat label="Active students" value="—" note="Yours plus marketplace" />
-        <Stat label="New enquiries" value="—" note="From learners nearby" />
+        {/* The one tile with something real behind it. The other three wait
+            on a calendar and bookings; a number here would have to be
+            invented, and this dashboard says why rather than doing that. */}
+        <Stat
+          label="New enquiries"
+          value={typeof newEnquiries === "number" ? String(newEnquiries) : "—"}
+          note={typeof newEnquiries === "number"
+            ? (newEnquiries ? "Waiting for you" : "None waiting")
+            : "From learners nearby"}
+        />
       </div>
 
       <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
