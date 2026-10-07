@@ -243,10 +243,14 @@ function StepAdi({ profile, set, errors, touched }) {
         </p>
       </div>
 
+      {/* Digits, not "F12345". The RSA register prints it plainly — "ADI
+          NUMBER | 40953" — and the earlier instruction to type an F was
+          something this app invented, which then rejected the first real
+          number anyone entered. The placeholder is a real-shaped number. */}
       <Field label="ADI number" error={touched && errors.adi_number}
-             hint="The number on your ADI certificate — F followed by five digits.">
-        <Input value={profile.adi_number} onChange={v => set({ adi_number: v.toUpperCase() })}
-               placeholder="F12345" />
+             hint="The number on your ADI certificate, as it appears on the RSA register.">
+        <Input value={profile.adi_number} onChange={v => set({ adi_number: v })}
+               placeholder="40953" inputMode="numeric" />
       </Field>
 
       <Field label="ADI category" hint="The vehicle category you're approved to instruct in.">

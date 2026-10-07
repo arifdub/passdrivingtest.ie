@@ -226,12 +226,12 @@ create policy instructor_admin_all on public.instructor_profiles
 --      set verification_status = 'verified',
 --          verified_at = now(),
 --          listed = true
---    where adi_number = 'F12345';
+--    where adi_number = '40953';
 --
 -- To reject, with a reason the instructor will see:
 --
 --   update public.instructor_profiles
 --      set verification_status = 'rejected',
 --          verification_notes = 'ADI number not found on the register.'
---    where adi_number = 'F12345';
+--    where adi_number = '40953';
 -- ---------------------------------------------------------------------------

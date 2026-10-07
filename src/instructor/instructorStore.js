@@ -116,7 +116,8 @@ function toRow(profile, userId) {
     phone: profile.phone?.trim() || null,
     business_name: profile.business_name?.trim() || null,
     bio: profile.bio?.trim() || null,
-    adi_number: profile.adi_number?.trim().toUpperCase() || null,
+    /* Digits, so it matches what a reviewer reads off the RSA register. */
+    adi_number: normaliseAdi(profile.adi_number) || null,
     adi_category: profile.adi_category || null,
     years_experience: toInt(profile.years_experience),
     transmissions: profile.transmissions || [],
@@ -191,10 +192,29 @@ export async function submitForReview(profile, userId) {
 /* Validation                                                                 */
 /* ------------------------------------------------------------------------- */
 
-/* An Irish ADI number is the letter F and five digits. Checked here only to
-   catch typos early — the real check is a human against the RSA register,
-   and this must never be mistaken for one. */
-export const ADI_PATTERN = /^F\d{5}$/i;
+/* An Irish ADI number is digits. Just digits.
+
+   THIS WAS WRONG, AND IT TURNED REAL INSTRUCTORS AWAY
+
+   It used to be /^F\d{5}$/i, on the belief that the number is an F followed
+   by five digits. The RSA's own register prints it plainly — "ADI NUMBER |
+   40953" — and there is no F anywhere on it. The first instructor to type
+   their real number was told it was malformed and could not get past step 2.
+
+   So this is now deliberately loose. The number is checked by a person
+   against the register, which is the only check that decides anything; the
+   job here is to catch a slip of the hand, not to second-guess the RSA's
+   numbering. Anything from three to eight digits passes.
+
+   A leading F is tolerated and stripped, because the field told people to
+   type one for weeks and some of them will keep doing it. What gets stored
+   is the digits, so it matches what a reviewer reads off the register. */
+export const ADI_PATTERN = /^F?\d{3,8}$/i;
+
+/* Spaces out, a stray leading F out, digits kept. */
+export function normaliseAdi(value) {
+  return (value || "").replace(/\s+/g, "").replace(/^[Ff]/, "");
+}
 
 export function validate(profile) {
   const errors = {};
@@ -204,8 +224,8 @@ export function validate(profile) {
 
   if (!profile.adi_number?.trim()) {
     errors.adi_number = "Required";
-  } else if (!ADI_PATTERN.test(profile.adi_number.trim())) {
-    errors.adi_number = "An ADI number looks like F12345";
+  } else if (!ADI_PATTERN.test(normaliseAdi(profile.adi_number))) {
+    errors.adi_number = "An ADI number is digits only, like 40953";
   }
 
   if (!profile.transmissions?.length) errors.transmissions = "Pick at least one";
