@@ -14,6 +14,54 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+html, body {
+  height: 100%;
+}
+
+body {
+  /* Standing on a home screen, this is an app, and an app does not bounce
+     past its own edges to show a strip of nothing. In a browser tab the cost
+     is pull-to-refresh, which an installed app has never had anyway. */
+  overscroll-behavior-y: none;
+}
+
+/* ---------------------------------------------------------------------------
+   THE APP SHELL, AND THE SPACE THE TAB BAR TAKES
+
+   The tab bar is position:fixed, so it is out of flow and the page behind it
+   does not know it is there. Every screen's last card was being cut in half by
+   it. Padding each screen individually is the version of this that rots: one
+   new screen, one forgotten class, one more clipped card.
+
+   So the shell measures the bar — it is not a fixed height, it grows with the
+   home-indicator inset and with the text size — publishes it as --pdt-tabbar,
+   and pads the content once.
+
+   The second rule is the half that is easy to miss. Screens declare
+   min-h-screen, so a screen with the padding added to it comes to one
+   viewport PLUS the bar: every short screen scrolls by about sixty pixels for
+   no reason. Shortening those screens by exactly the bar's height makes the
+   two cancel. Specificity (0,2,0) against Tailwind's (0,1,0) is what lets it
+   win without !important — the same trick, for the same reason, as
+   public/app-theme.css.
+
+   100dvh, not 100vh: on iOS 100vh is the viewport with the browser bars
+   hidden, so in a tab it is taller than what you can actually see.
+   --------------------------------------------------------------------------- */
+.app-shell {
+  min-height: 100vh;          /* fallback */
+  min-height: 100dvh;
+}
+
+.app-shell .min-h-screen {
+  min-height: calc(100vh - var(--pdt-tabbar, 0px));
+  min-height: calc(100dvh - var(--pdt-tabbar, 0px));
+}
+
+.app-content {
+  padding-bottom: var(--pdt-tabbar, 0px);
+}
+
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,

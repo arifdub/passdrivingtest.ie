@@ -94,7 +94,30 @@
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<!-- ===========================================================================
+     ADDING *THIS* PAGE TO A HOME SCREEN
+
+     The script at the top of this file sends an installed icon straight into
+     the app, and it tests display-mode: standalone and navigator.standalone to
+     decide. Neither is ever true without these two metas: iOS only opens a
+     home-screen icon in its own window when the page said it could, and
+     without that the icon is an ordinary Safari bookmark — address bar,
+     toolbar and all — so the redirect never fired and the app never looked
+     like an app.
+
+     Installing from /student or /adi is still the better route: those carry
+     their own manifest, name and icon. This is for the person who hits Share
+     while reading the page they landed on, which is most people.
+     =========================================================================== -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="PassDrivingTest">
+
+<!-- No apple-mobile-web-app-status-bar-style here, deliberately. The app
+     entries set black-translucent and pay for it by padding every screen with
+     env(safe-area-inset-top); this page pads nothing, so translucent would
+     slide the header under the clock on the one launch where the redirect
+     above fails. The default reserves the space instead. -->
 <meta name="theme-color" content="#0f172a">
 
 <style>

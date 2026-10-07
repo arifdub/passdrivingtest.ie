@@ -1070,7 +1070,12 @@ function InstallCard() {
       <div>
         <p className="font-semibold text-slate-900 dark:text-white text-sm">Study on your phone</p>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-          Open passdrivingtest.ie/app on your phone to add it to your home screen.
+          {/* /student, not /app: the learner app's manifest, name and icon live
+              on that page, and adding from anywhere else gets a generic icon
+              or a plain bookmark. The instructor portal is a separate app at
+              /adi with its own. */}
+          On your phone, open <strong>passdrivingtest.ie/student</strong> in the
+          browser, then Share → Add to Home Screen.
         </p>
       </div>
     </div>

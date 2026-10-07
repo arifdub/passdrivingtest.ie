@@ -94,6 +94,9 @@ function AppShell() {
 
   const [tab, setTab] = useState(startTab);
   const [stack, setStack] = useState([{ screen: startTab }]);
+
+  /* Measured by the tab bar itself — see the shell's render, below. */
+  const [tabBarHeight, setTabBarHeight] = useState(0);
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("pdt-theme") || "light";
@@ -167,16 +170,31 @@ function AppShell() {
     if (dx > 70) back();
   }
 
+  /* The tab bar is fixed, so the page behind it has no idea it exists and the
+     last card on every screen was being clipped. The bar measures itself and
+     the shell publishes that as a custom property; src/index.css spends it in
+     two places. Measured rather than hard-coded because the bar grows with the
+     home-indicator inset and with the reading size. */
+  const tabsHidden = isFullScreen(view);
+
   return (
     <div
-      className="min-h-screen bg-slate-50 dark:bg-slate-900"
+      className="app-shell bg-slate-50 dark:bg-slate-900"
+      style={{ "--pdt-tabbar": tabsHidden ? "0px" : `${tabBarHeight}px` }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={() => { swipe.current = null; }}
     >
-      <CurrentScreen view={view} go={go} back={back} theme={theme} toggleTheme={toggleTheme} />
-      <TabBar tab={activeTab} onSelect={selectTab} hidden={isFullScreen(view)} />
+      <div className="app-content">
+        <CurrentScreen view={view} go={go} back={back} theme={theme} toggleTheme={toggleTheme} />
+      </div>
+      <TabBar
+        tab={activeTab}
+        onSelect={selectTab}
+        hidden={tabsHidden}
+        onMeasure={setTabBarHeight}
+      />
     </div>
   );
 }
@@ -360,10 +378,28 @@ function NotReady({ onBack }) {
 /* ===========================================================================
    TAB BAR
    =========================================================================== */
-function TabBar({ tab, onSelect, hidden }) {
+function TabBar({ tab, onSelect, hidden, onMeasure }) {
+  const ref = useRef(null);
+
+  /* Reports its own height, including the home-indicator spacer below the
+     labels, so the shell can leave exactly that much room and no more. */
+  useEffect(() => {
+    if (hidden) { onMeasure(0); return; }
+    const el = ref.current;
+    if (!el) return;
+
+    const report = () => onMeasure(el.offsetHeight);
+    report();
+
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hidden, onMeasure]);
+
   if (hidden) return null;
   return (
-    <nav className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 z-20">
+    <nav ref={ref} className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 z-20">
       <div className="max-w-2xl mx-auto flex">
         {TABS.map(({ id, label, icon: Icon }) => {
           const active = tab === id;
