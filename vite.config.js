@@ -65,6 +65,10 @@ export default defineConfig({
            separate document only so it can carry its own manifest, name and
            icon. See adi/index.html. */
         adi: "adi/index.html",
+        /* And the admin's. Same bundle again; a third document only so the
+           admin portal can be installed as its own app with its own name and
+           icon, rather than appearing on a home screen as the learner's. */
+        admin: "admin/index.html",
       },
     },
   },

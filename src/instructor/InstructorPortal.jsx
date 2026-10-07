@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { Logo, EmptyState, PrimaryButton, SecondaryButton, AccountMenu } from "../ui";
 import { useAuth } from "../appAuth";
+import { usePlatform } from "../platform";
+import { portalsFor } from "../portals";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
 
@@ -90,6 +92,7 @@ const COMING = {
 
 export default function InstructorPortal({ onExitRole }) {
   const { user, signOut } = useAuth();
+  const { accountRoles, isAdminAccount } = usePlatform();
   const [section, setSection] = useState("dashboard");
   const [registering, setRegistering] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -139,6 +142,7 @@ export default function InstructorPortal({ onExitRole }) {
                 to hide them in. */}
             <AccountMenu
               email={user?.email}
+              portals={portalsFor({ accountRoles, isAdminAccount, here: "instructor" })}
               onSwitch={onExitRole}
               switchLabel="Back to the site"
               onSignOut={signOut}

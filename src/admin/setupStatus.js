@@ -14,6 +14,7 @@
     04  instructor_profiles   the table registration writes to
     06  instructor_review     the admin-only view behind the review queue
     07  profiles.roles        the column that lets one account hold both sides
+    08  admin_stats()         the counts on this dashboard
 
   WHAT IS NOT CHECKED, AND WHY IT IS NOT PRETENDED
 
@@ -34,7 +35,7 @@ import { supabase, HAS_SUPABASE } from "../supabaseClient";
 /* Postgres says so precisely: 42P01 is an undefined table or view, 42703 an
    undefined column. Anything else — a permission refusal, a network failure —
    means the thing may well be there and something else went wrong. */
-const MISSING = new Set(["42P01", "42703", "PGRST205", "PGRST204"]);
+const MISSING = new Set(["42P01", "42703", "PGRST202", "PGRST204", "PGRST205"]);
 
 export const CHECKS = [
   {
@@ -58,13 +59,37 @@ export const CHECKS = [
     table: "profiles",
     column: "roles",
   },
+  {
+    id: "08",
+    label: "Dashboard counts",
+    detail: "Counts learners and instructors without reading them.",
+    rpc: "admin_stats",
+  },
 ];
 
-async function probe({ table, column }) {
-  const { error } = await supabase.from(table).select(column).limit(1);
+async function probe({ table, column, rpc }) {
+  /* A missing function comes back as 404/PGRST202 rather than a Postgres
+     error code, so it needs its own recognition. */
+  const { error } = rpc
+    ? await supabase.rpc(rpc)
+    : await supabase.from(table).select(column).limit(1);
+
   if (!error) return { state: "present" };
   if (MISSING.has(error.code)) return { state: "missing" };
   return { state: "unknown", note: error.message };
+}
+
+/* The counts themselves. Returns null when the function isn't there yet —
+   the tiles stay blank, which is what they have always done and is still
+   better than a number nobody can stand over. */
+export async function loadStats() {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase.rpc("admin_stats");
+  if (error) {
+    console.warn("admin_stats unavailable:", error.message);
+    return null;
+  }
+  return Array.isArray(data) ? data[0] || null : data || null;
 }
 
 export async function checkSetup() {

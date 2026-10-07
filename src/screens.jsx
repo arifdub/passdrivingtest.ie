@@ -26,6 +26,8 @@ import {
   ADI_SECTIONS, MOCKS, DECKS, PASS_MARK, PASS_QUESTIONS, MOCK_LENGTH, MOCK_MINUTES, lockedForGuest,
 } from "./appStructure";
 import { useAuth } from "./appAuth";
+import { usePlatform } from "./platform";
+import { portalsFor } from "./portals";
 import { useProgress } from "./progressStore";
 import usePwaInstall from "./usePwaInstall";
 import { getDeck } from "./contentSources";
@@ -1100,6 +1102,8 @@ function InstallStep({ n, children }) {
    =========================================================================== */
 export function ProfileScreen({ theme, toggleTheme }) {
   const { profile, displayName, subscription, signOut, mode, isGuest, exitGuest } = useAuth();
+  const { accountRoles, isAdminAccount } = usePlatform();
+  const otherPortals = portalsFor({ accountRoles, isAdminAccount, here: "student" });
   const { resetAll, overall } = useProgress();
   const { sizeId, setSizeId, sizes } = useTextSize();
 
@@ -1319,6 +1323,28 @@ export function ProfileScreen({ theme, toggleTheme }) {
             )}
           </div>
         </SettingsGroup>
+
+        {/* The other portals this ACCOUNT holds. The two portals carry the
+            same list in their header menus; the learner app has Settings, so
+            it goes here. Absent for anyone with only the learner side, which
+            is almost everyone. */}
+        {otherPortals.length > 0 && (
+          <SettingsGroup title="Also on this account">
+            <div className="divide-y divide-slate-100 dark:divide-slate-700">
+              {otherPortals.map(({ href, label, icon: Icon }) => (
+                <a
+                  key={href}
+                  href={href}
+                  className="flex items-center gap-3 px-4 py-3.5 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                >
+                  <Icon size={17} className="text-slate-400 shrink-0" />
+                  {label}
+                  <ChevronRight size={16} className="ml-auto text-slate-300 dark:text-slate-600" />
+                </a>
+              ))}
+            </div>
+          </SettingsGroup>
+        )}
 
         {!isGuest && (
           <div className="mt-4">

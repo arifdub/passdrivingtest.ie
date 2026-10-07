@@ -4,8 +4,8 @@
     { "source": "/student/(.*)", "destination": "/app/index.html" },
     { "source": "/adi", "destination": "/adi/index.html" },
     { "source": "/adi/(.*)", "destination": "/adi/index.html" },
-    { "source": "/admin", "destination": "/app/index.html" },
-    { "source": "/admin/(.*)", "destination": "/app/index.html" },
+    { "source": "/admin", "destination": "/admin/index.html" },
+    { "source": "/admin/(.*)", "destination": "/admin/index.html" },
     { "source": "/app", "destination": "/app/index.html" },
     { "source": "/app/(.*)", "destination": "/app/index.html" }
   ]

@@ -433,7 +433,18 @@ export function SettingsGroup({ title, children }) {
    <details> again: opens, closes and takes keyboard focus with no state and
    no library. The script-free version of a menu.
    --------------------------------------------------------------------------- */
-export function AccountMenu({ email, onSignOut, onSwitch, switchLabel = "Switch side" }) {
+export function AccountMenu({
+  email,
+  onSignOut,
+  onSwitch,
+  switchLabel = "Switch side",
+  /* The other portals this ACCOUNT can open — [{ href, label, icon }].
+     Computed by the caller from the roles the database returned, never from
+     anything the device remembers, and never including the portal you are
+     already looking at. An account with one side gets none of these and the
+     menu is just "signed in as / sign out", which is what it was. */
+  portals = [],
+}) {
   return (
     <details className="relative group">
       <summary
@@ -450,6 +461,23 @@ export function AccountMenu({ email, onSignOut, onSwitch, switchLabel = "Switch 
             Signed in as<br />
             <span className="font-bold text-slate-900 dark:text-white">{email}</span>
           </p>
+        )}
+
+        {portals.length > 0 && (
+          <div className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1">
+            <p className="px-3 pt-1 pb-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              Also on this account
+            </p>
+            {portals.map(({ href, label, icon: Icon }) => (
+              <a
+                key={href}
+                href={href}
+                className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-left whitespace-nowrap text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+              >
+                <Icon size={15} className="text-slate-400 shrink-0" /> {label}
+              </a>
+            ))}
+          </div>
         )}
 
         {onSwitch && (

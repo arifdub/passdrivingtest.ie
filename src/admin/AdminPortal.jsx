@@ -35,10 +35,11 @@ import {
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
+import { portalsFor } from "../portals";
 import { Logo, EmptyState, PrimaryButton, AccountMenu } from "../ui";
 import AuthScreen from "../AuthScreen";
 import InstructorReview from "./InstructorReview";
-import { checkSetup } from "./setupStatus";
+import { checkSetup, loadStats } from "./setupStatus";
 
 const SECTIONS = [
   { id: "overview",    label: "Overview",    icon: LayoutDashboard },
@@ -94,7 +95,7 @@ const COMING = {
 
 export default function AdminPortal() {
   const { isSignedIn, profile, displayName, user, signOut } = useAuth();
-  const { isAdmin } = usePlatform();
+  const { isAdmin, accountRoles, isAdminAccount } = usePlatform();
   const [section, setSection] = useState("overview");
 
   /* Both sources agree or you don't come in. isAdmin reads the role the
@@ -144,7 +145,11 @@ export default function AdminPortal() {
               <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/20 text-red-300 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
                 <ShieldAlert size={12} /> Admin
               </span>
-              <AccountMenu email={user?.email} onSignOut={signOut} />
+              <AccountMenu
+                email={user?.email}
+                portals={portalsFor({ accountRoles, isAdminAccount, here: "admin" })}
+                onSignOut={signOut}
+              />
             </div>
           </div>
           <h1 className="mt-3 text-xl font-black tracking-tight">Platform administration</h1>
@@ -181,14 +186,28 @@ export default function AdminPortal() {
 }
 
 function Overview() {
+  /* Undefined until the first read finishes, null if the function isn't there
+     — the tiles tell those two apart rather than showing a zero for either.
+     A zero means "none", and neither of those does. */
+  const [stats, setStats] = useState(undefined);
+
+  useEffect(() => { loadStats().then(setStats); }, []);
+
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Students" note="Registered learners" />
-        <Stat label="Instructors" note="Verified and active" />
-        <Stat label="Bookings" note="Last 30 days" />
-        <Stat label="Platform revenue" note="Marketplace fees" />
+        <Stat label="Learners" value={stats?.learners} note="Accounts with the learner side" />
+        <Stat label="Instructors" value={stats?.instructors} note="Accounts with the instructor side" />
+        <Stat label="Verified ADIs" value={stats?.verified_instructors} note="Checked against the register" />
+        <Stat label="Waiting" value={stats?.pending_review} note="Submitted, not yet checked" />
       </div>
+
+      {/* Bookings and revenue are not built, so they are not tiles. A blank
+          tile beside real ones reads as a number that failed to load. */}
+      <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+        Bookings and revenue arrive with the marketplace. Nothing is counted
+        for them yet, so they are not shown.
+      </p>
 
       <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
         <div className="flex items-center gap-2.5">
@@ -319,12 +338,17 @@ function SetupChecklist() {
   );
 }
 
-function Stat({ label, note }) {
+function Stat({ label, value, note }) {
+  const known = typeof value === "number";
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white tabular-nums">—</p>
-      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-snug">{note}</p>
+      <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white tabular-nums">
+        {known ? value : "—"}
+      </p>
+      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-snug">
+        {known ? note : "Not counted yet"}
+      </p>
     </div>
   );
 }
