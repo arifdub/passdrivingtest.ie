@@ -8,7 +8,7 @@
 */
 
 import React from "react";
-import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, LogOut, Repeat, X } from "lucide-react";
 
 /* ------------------------------------------------------------------------- */
 /* The brand lockup: the wheel from public/logo.png with the name set in live
@@ -413,5 +413,61 @@ export function SettingsGroup({ title, children }) {
         {children}
       </div>
     </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   ACCOUNT MENU
+
+   The instructor portal and the admin portal are full screens with a dark
+   header and no tab bar, so neither had anywhere to put "sign out" — the
+   learner app has it in Settings, and those two have no Settings. The only
+   control on the instructor header was "Switch", which changes side without
+   signing out, and the admin header had nothing at all. Being unable to get
+   out of a portal is not a small omission on a shared or borrowed phone.
+
+   One component for both, so the two cannot drift. It shows which account is
+   signed in, because on a platform where one person may hold two sides and an
+   admin may hold three, "signed in as who?" is a real question.
+
+   <details> again: opens, closes and takes keyboard focus with no state and
+   no library. The script-free version of a menu.
+   --------------------------------------------------------------------------- */
+export function AccountMenu({ email, onSignOut, onSwitch, switchLabel = "Switch side" }) {
+  return (
+    <details className="relative group">
+      <summary
+        className="list-none cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:text-white hover:border-white/40 transition [&::-webkit-details-marker]:hidden"
+        aria-label="Account menu"
+      >
+        Account
+        <ChevronRight size={13} className="rotate-90 group-open:-rotate-90 transition-transform" />
+      </summary>
+
+      <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-[250px] max-w-[calc(100vw-40px)] rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl p-2">
+        {email && (
+          <p className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 break-all">
+            Signed in as<br />
+            <span className="font-bold text-slate-900 dark:text-white">{email}</span>
+          </p>
+        )}
+
+        {onSwitch && (
+          <button
+            onClick={onSwitch}
+            className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-left whitespace-nowrap text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+          >
+            <Repeat size={15} className="text-slate-400 shrink-0" /> {switchLabel}
+          </button>
+        )}
+
+        <button
+          onClick={onSignOut}
+          className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-left whitespace-nowrap text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+        >
+          <LogOut size={15} className="shrink-0" /> Sign out
+        </button>
+      </div>
+    </details>
   );
 }

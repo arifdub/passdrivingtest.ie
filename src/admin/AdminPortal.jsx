@@ -34,7 +34,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
-import { Logo, EmptyState, PrimaryButton } from "../ui";
+import { Logo, EmptyState, PrimaryButton, AccountMenu } from "../ui";
+import AuthScreen from "../AuthScreen";
 import InstructorReview from "./InstructorReview";
 
 const SECTIONS = [
@@ -90,7 +91,7 @@ const COMING = {
 };
 
 export default function AdminPortal() {
-  const { isSignedIn, profile, displayName } = useAuth();
+  const { isSignedIn, profile, displayName, user, signOut } = useAuth();
   const { isAdmin } = usePlatform();
   const [section, setSection] = useState("overview");
 
@@ -100,7 +101,31 @@ export default function AdminPortal() {
   const allowed = isSignedIn
     && (isAdmin || profile?.role === "admin" || profile?.role === "super_admin");
 
-  if (!allowed) return <Restricted isSignedIn={isSignedIn} />;
+  /* SIGNED OUT GETS A SIGN-IN, NOT A CLOSED DOOR
+
+     This used to show the restricted notice to everyone, including an admin
+     whose session had simply expired — a page saying "sign in with an
+     administrator account" and offering no way to sign in. The only route
+     back was to guess that /student had a form and that the session was
+     shared.
+
+     No sign-up here: an admin account is not something you create, it is
+     something granted server-side (sql/07). A form offering to make one
+     would be offering something it cannot deliver. */
+  if (!isSignedIn) {
+    return (
+      <AuthScreen
+        audience="admin"
+        initialView="login"
+        allowGuest={false}
+        allowSignup={false}
+        onBack={() => { window.location.href = "/"; }}
+      />
+    );
+  }
+
+  /* Signed in, but not an admin. */
+  if (!allowed) return <Restricted onSignOut={signOut} email={user?.email} />;
 
   const active = SECTIONS.find(s => s.id === section) || SECTIONS[0];
 
@@ -113,9 +138,12 @@ export default function AdminPortal() {
         >
           <div className="flex items-center justify-between gap-3">
             <Logo size="sm" />
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/20 text-red-300 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
-              <ShieldAlert size={12} /> Admin
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/20 text-red-300 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                <ShieldAlert size={12} /> Admin
+              </span>
+              <AccountMenu email={user?.email} onSignOut={signOut} />
+            </div>
           </div>
           <h1 className="mt-3 text-xl font-black tracking-tight">Platform administration</h1>
           <p className="text-sm text-slate-400">Signed in as {displayName}</p>
@@ -242,10 +270,14 @@ function ComingSoon({ section }) {
   );
 }
 
-/* Deliberately says as little as possible. "You are not an admin" confirms
-   that /admin is a real address and that the account exists; a flat refusal
-   tells an idle prodder nothing they didn't already know. */
-function Restricted({ isSignedIn }) {
+/* Reached only when someone IS signed in and is not an admin — a signed-out
+   visitor gets the sign-in form instead.
+
+   Still says as little as possible about why. But it offers a way out, which
+   the previous version did not: the likeliest person here is an admin signed
+   into the wrong one of their accounts, and "back to the home page" is no use
+   to them at all. */
+function Restricted({ onSignOut, email }) {
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center px-6">
       <div className="max-w-sm text-center">
@@ -256,15 +288,20 @@ function Restricted({ isSignedIn }) {
           Restricted area
         </h1>
         <p className="mt-2 text-sm text-slate-400 leading-relaxed">
-          {isSignedIn
-            ? "This account doesn't have access to platform administration."
-            : "Sign in with an administrator account to continue."}
+          {email ? <strong className="text-slate-300">{email}</strong> : "This account"} doesn't
+          have access to platform administration.
         </p>
         <div className="mt-5">
-          <PrimaryButton onClick={() => { window.location.href = "/"; }}>
-            Back to PassDrivingTest.ie
+          <PrimaryButton onClick={onSignOut}>
+            Sign in as someone else
           </PrimaryButton>
         </div>
+        <button
+          onClick={() => { window.location.href = "/"; }}
+          className="mt-2 w-full text-sm font-semibold text-slate-400 hover:text-emerald-400 py-2.5"
+        >
+          Back to PassDrivingTest.ie
+        </button>
       </div>
     </div>
   );

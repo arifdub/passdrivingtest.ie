@@ -27,7 +27,7 @@ import {
   Wallet, Star, MessageSquare, UserCircle, ChevronLeft, Hammer,
   ShieldCheck, ShieldAlert, Clock3, Loader2, Pencil,
 } from "lucide-react";
-import { Logo, EmptyState, PrimaryButton, SecondaryButton } from "../ui";
+import { Logo, EmptyState, PrimaryButton, SecondaryButton, AccountMenu } from "../ui";
 import { useAuth } from "../appAuth";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
@@ -89,7 +89,7 @@ const COMING = {
 };
 
 export default function InstructorPortal({ onExitRole }) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [section, setSection] = useState("dashboard");
   const [registering, setRegistering] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -134,12 +134,15 @@ export default function InstructorPortal({ onExitRole }) {
         >
           <div className="flex items-center justify-between gap-3">
             <Logo size="sm" />
-            <button
-              onClick={onExitRole}
-              className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-emerald-400 py-1"
-            >
-              <ChevronLeft size={15} /> Switch
-            </button>
+            {/* Switch changes side without signing out; sign out ends the
+                session. Both live here because this screen has no Settings
+                to hide them in. */}
+            <AccountMenu
+              email={user?.email}
+              onSwitch={onExitRole}
+              switchLabel="Back to the site"
+              onSignOut={signOut}
+            />
           </div>
           <h1 className="mt-3 text-xl font-black tracking-tight">Instructor portal</h1>
           <p className="text-sm text-slate-400">

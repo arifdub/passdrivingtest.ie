@@ -47,9 +47,13 @@ import { TOTAL_QUESTIONS } from "./theorySections";
 import InstallPopup from "./InstallPopup";
 
 export default function AuthScreen({
-  audience = "student",          // student | instructor
+  audience = "student",          // student | instructor | admin
   initialView = "welcome",       // welcome | login | signup
   allowGuest = true,
+  /* An admin account is granted server-side, never created at a form. A
+     sign-up link here would offer something the screen cannot deliver, so
+     /admin turns it off and the screen is sign-in only. */
+  allowSignup = true,
   onBack = null,                 // where Back goes when there's no welcome panel
 }) {
   const { signIn, signUp, resetPassword, continueAsGuest, mode } = useAuth();
@@ -66,12 +70,20 @@ export default function AuthScreen({
   const isSignup = view === "signup";
   const isWelcome = view === "welcome";
   const isInstructor = audience === "instructor";
+  const isAdminDoor = audience === "admin";
 
   /* Was there a welcome panel before this form, or did a link drop them
      straight onto it? Decides what Back means. */
   const hasWelcomeBehind = initialView === "welcome";
 
-  const copy = isInstructor
+  const copy = isAdminDoor
+    ? {
+        signupTitle: "Platform administration",
+        signupBlurb: "",
+        loginTitle: "Platform administration",
+        loginBlurb: "Sign in with an account that has admin access.",
+      }
+    : isInstructor
     ? {
         signupTitle: "Create your instructor account",
         signupBlurb: "You'll need an account to submit your ADI number for checking.",
@@ -362,6 +374,7 @@ export default function AuthScreen({
                 </button>
               </div>
 
+              {allowSignup && (
               <p className="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
                 {isSignup ? "Already have an account?" : "Don't have an account?"}{" "}
                 <button
@@ -376,6 +389,16 @@ export default function AuthScreen({
                   {isSignup ? "Sign in" : "Sign up"}
                 </button>
               </p>
+              )}
+
+              {/* Said plainly, because someone who cannot find the sign-up
+                  link will otherwise assume it is broken. */}
+              {!allowSignup && (
+                <p className="mt-5 text-center text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Admin access is granted on an existing account, not signed up
+                  for. Sign in with the account that was given it.
+                </p>
+              )}
             </div>
 
             <div className="mt-5 w-full space-y-1">
@@ -397,7 +420,7 @@ export default function AuthScreen({
           </>
         )}
 
-        {!isInstructor && (
+        {!isInstructor && !isAdminDoor && (
           <p className="mt-6 text-xs text-slate-500 text-center">
             Full access to all study material — no payment required.
           </p>
