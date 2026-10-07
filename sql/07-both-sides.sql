@@ -115,6 +115,19 @@ begin
   -- Server-side callers are trusted: the SQL editor, a migration, an Edge
   -- Function with the service key.
   if coalesce(auth.role(), 'service_role') = 'service_role' then
+    -- A trusted caller who writes the OLD single column meant it. Every
+    -- instruction written before this file — including the one printed on
+    -- the admin screen — says `set role = 'admin'`, and deriving role from
+    -- roles unconditionally would quietly undo that write: roles is
+    -- unchanged, so role snaps straight back and the update appears to do
+    -- nothing at all. Silent no-ops are the worst kind of migration bug, so
+    -- the intent is honoured by folding it into the set.
+    if TG_OP = 'UPDATE'
+       and new.role is distinct from old.role
+       and new.roles is not distinct from old.roles then
+      new.roles := array(select distinct unnest(new.roles || array[new.role]));
+    end if;
+
     new.role := public.primary_role(new.roles);
     return new;
   end if;

@@ -179,25 +179,29 @@ function Overview() {
           <li className="flex gap-2.5">
             <span className="text-emerald-500 font-black shrink-0">1</span>
             <span>
-              Run the SQL files in order —
-              <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded mx-1">03</code>
-              roles,
-              <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded mx-1">04</code>
-              instructor profiles,
-              <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded mx-1">05</code>
-              account separation,
-              <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded mx-1">06</code>
-              the permission that lets this screen verify anyone.
+              Run <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">sql/RUN-PENDING.sql</code>,
+              which is <code className="text-xs">04</code> instructor profiles,
+              <code className="text-xs mx-1">05</code> account roles,
+              <code className="text-xs mx-1">06</code> the permission that lets
+              this screen verify anyone, and <code className="text-xs mx-1">07</code>
+              one account holding both sides — in the order they depend on each
+              other. It is one paste and safe to run twice.
             </span>
           </li>
           <li className="flex gap-2.5">
             <span className="text-emerald-500 font-black shrink-0">2</span>
             <span>
               Promote your own account from the Supabase SQL editor — the only
-              route in, by design:
-              <code className="block mt-1.5 text-xs bg-slate-100 dark:bg-slate-900 p-2 rounded overflow-x-auto">
-                update public.profiles set role = 'super_admin' where id = (select id from auth.users where email = 'you@example.com');
+              route in, by design. This <em>adds</em> admin rather than
+              replacing what the account already is, so one email can be a
+              learner, an instructor and an admin:
+              <code className="block mt-1.5 text-xs bg-slate-100 dark:bg-slate-900 p-2 rounded overflow-x-auto whitespace-pre-wrap break-words">
+{`update public.profiles
+   set roles = array(select distinct unnest(roles || array['admin']))
+ where id = (select id from auth.users where email = 'you@example.com');`}
               </code>
+              Then sign out and back in — the roles are read when the session
+              loads.
             </span>
           </li>
           <li className="flex gap-2.5">
