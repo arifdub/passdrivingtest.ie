@@ -117,6 +117,30 @@ export default function AuthScreen({
       : await signIn({ email, password });
     setBusy(false);
 
+    /* ---------------------------------------------------------------------
+       ALREADY HAS AN ACCOUNT — WHICH IS NOW A ROUTE, NOT A WALL
+
+       The two sides share one account, so an instructor registering with the
+       email they already learn under is doing the expected thing, not making
+       a mistake. Before this, Supabase's "User already registered" landed as
+       a flat red error at the exact moment the product was supposed to say
+       yes.
+
+       Sign in instead, and the side they came for is offered on arrival —
+       see AddSide in App.jsx.
+       --------------------------------------------------------------------- */
+    if (result.alreadyRegistered) {
+      setView("login");
+      setConfirm("");
+      setMessage({
+        type: "info",
+        text: isInstructor
+          ? "If you already have an account with this email, sign in here and we'll add the instructor side to it — you don't need a second one."
+          : "If you already have an account with this email, sign in here and we'll add the learner side to it.",
+      });
+      return;
+    }
+
     if (!result.ok) {
       setMessage({ type: "error", text: result.error });
       return;

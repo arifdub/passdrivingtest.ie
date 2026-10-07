@@ -230,7 +230,7 @@ export function AuthProvider({ children }) {
       if (users[key]) {
         const msg = "An account with that email already exists on this device.";
         setError(msg);
-        return { ok: false, error: msg };
+        return { ok: false, error: msg, alreadyRegistered: true };
       }
       const u = { id: localUserId(email), email: key, full_name: fullName || "",
                   role: signupRole, roles: [signupRole] };
@@ -248,6 +248,41 @@ export function AuthProvider({ children }) {
       password,
       options: { data: { full_name: fullName || "", role: signupRole } },
     });
+
+    /* ---------------------------------------------------------------------
+       AN EMAIL THAT ALREADY HAS AN ACCOUNT
+
+       Now that one account can hold both sides, this stopped being a dead
+       end and became the commonest way someone asks for the second one: they
+       are a learner, they qualify as an ADI, they go to the instructor door
+       and sign UP with the email they already use. Of course they do — that
+       is what "register as an instructor" means.
+
+       Supabase answers that two different ways depending on one project
+       setting, and both have to be caught or the person hits a wall on the
+       likeliest path through the product:
+
+         · confirmations off — a plain "User already registered" error
+         · confirmations on  — no error at all. It returns a user with an
+           EMPTY identities array, deliberately, so that a stranger cannot
+           use the sign-up form to discover who has an account
+
+       The caller turns this into a signpost rather than a refusal.
+       --------------------------------------------------------------------- */
+    const existing =
+      (err && /already registered|already exists|user_already_exists/i.test(err.message || "")) ||
+      (!err && data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0);
+
+    if (existing) {
+      /* Deliberately conditional wording. Saying "this email has an account"
+         would undo the obfuscation Supabase just went to the trouble of, and
+         "if you already have one" reads the same to the person who does. */
+      return {
+        ok: false,
+        alreadyRegistered: true,
+        error: "There may already be an account with this email.",
+      };
+    }
 
     if (err) {
       const msg = describeAuthError(err);
