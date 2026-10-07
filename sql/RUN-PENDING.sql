@@ -255,10 +255,31 @@ begin
   return new;
 end $$;
 
-drop trigger if exists on_auth_user_created_apply_role on auth.users;
-create trigger on_auth_user_created_apply_role
-  after insert on auth.users
-  for each row execute function public.apply_signup_role();
+-- WHY THIS IS WRAPPED, AND NOT A PLAIN CREATE TRIGGER
+--
+-- auth.users belongs to supabase_auth_admin, not to the role the SQL editor
+-- runs as. On most projects postgres can still attach a trigger to it; on
+-- some it cannot, and the failure is "must be owner of relation users".
+--
+-- A pasted script runs as ONE transaction, so that one statement failing
+-- rolls back everything behind it — the table, the columns, the policies —
+-- and leaves no trace of why. A migration that takes itself down over a
+-- belt-and-braces step is worse than one that says so and carries on.
+--
+-- And it IS belt and braces: the role is also applied by the trigger on
+-- profiles, which reads the same sign-up metadata and needs no privilege on
+-- the auth schema. This one just gets it there a moment earlier.
+do $$
+begin
+  execute 'drop trigger if exists on_auth_user_created_apply_role on auth.users';
+  execute 'create trigger on_auth_user_created_apply_role
+             after insert on auth.users
+             for each row execute function public.apply_signup_role()';
+exception when others then
+  raise notice
+    'Could not attach the sign-up trigger to auth.users (%). Not fatal: the trigger on profiles applies the role from the same metadata.',
+    sqlerrm;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 3. The role is set by the platform, not sent by the browser
