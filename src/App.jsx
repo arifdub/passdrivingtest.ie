@@ -31,7 +31,7 @@ import {
   Home as HomeIcon, BookOpen, Timer, TrendingUp, User, Loader2, Lock,
   /* Aliased: react-router exports a <Route> too, and the collision is a
      build error, not a warning. */
-  Settings as SettingsIcon, Route as RouteIcon, ArrowRight,
+  Settings as SettingsIcon, Route as RouteIcon, ArrowRight, AlertCircle,
 } from "lucide-react";
 import { AuthProvider, useAuth } from "./appAuth";
 import { PlatformProvider, usePlatform } from "./platform";
@@ -642,25 +642,64 @@ function InstructorAuthRoute({ view }) {
 }
 
 /* ---------------------------------------------------------------------------
-   WRONG DOOR
+   ADD THIS SIDE
 
    A learner's account at /adi, or an instructor's at /student.
 
-   NOT AN ERROR SCREEN. Nobody did anything wrong: they have one email address
-   and two products now exist behind it. The useful thing is to say which side
-   this account belongs to and put them on it in one tap, rather than a refusal
-   that leaves them wondering whether the password was wrong.
+   This used to be a dead end that told them to register again with a second
+   email address. That was wrong about how people actually are: the same
+   person learns, teaches, and sends their own kids through the test. An ADI
+   who wants to read the theory material should not need a second inbox, and a
+   learner who qualifies three years later should not lose their account.
 
-   Signing out is offered beside it, because the other likely truth is that
-   they meant to use a different account.
+   So it is an offer, not a refusal. One tap adds the side to the account they
+   already have — same email, same password, same sign-in.
+
+   WHY IT IS A TAP AND NOT AUTOMATIC
+
+   Because walking through a door is not the same as asking to live there. A
+   learner tapping "For instructors" on the front page to see what it is must
+   not quietly become an instructor, and an ADI glancing at the theory section
+   must not find a learner's app in their account tomorrow. The person decides,
+   once, in a sentence they can read.
+
+   Nothing is granted by this that could not be had anyway: both sides are
+   self-service sign-ups. Holding the instructor side means the portal opens —
+   it has never meant an ADI number has been checked, and sql/06 still says a
+   person does that.
    --------------------------------------------------------------------------- */
-function WrongDoor({ accountRole }) {
+function AddSide({ side }) {
   const { signOut, user } = useAuth();
-  const isInstructorAccount = accountRole === "instructor";
+  const { addSide, accountRoles } = usePlatform();
 
-  const here = isInstructorAccount ? "learner" : "instructor";
-  const theirs = isInstructorAccount ? "instructor" : "learner";
-  const go = isInstructorAccount ? "/adi" : "/student";
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState(null);
+
+  const wantInstructor = side === "instructor";
+  const label = wantInstructor ? "instructor" : "learner";
+  const other = wantInstructor ? "learner" : "instructor";
+  const elsewhere = wantInstructor ? "/student" : "/adi";
+
+  /* NO navigate() HERE, AND THAT IS THE WHOLE TRICK.
+
+     This screen is rendered BY the route the person already asked for — the
+     gate inside /student or /adi, standing in front of the real thing. Adding
+     the side changes what that gate decides, so the route renders its own
+     content on the next pass and there is nowhere to go.
+
+     Navigating anyway cost an afternoon: /student would navigate to /student,
+     which lands in the same place but counts as a navigation, and it landed
+     AFTER the gate's own <Navigate> to the onboarding question. React
+     Router's <Navigate> fires once on mount, so it never ran again and the
+     screen went blank — a route rendering a redirect that had already been
+     overruled. */
+  async function add() {
+    setBusy(true);
+    setProblem(null);
+    const result = await addSide(side);
+    setBusy(false);
+    if (!result.ok) setProblem(result.error);
+  }
 
   return (
     <div
@@ -672,28 +711,50 @@ function WrongDoor({ accountRole }) {
 
         <div className="mt-7 bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
           <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
-            This is your {theirs} account
+            Add the {label} side to your account
           </h1>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            {user?.email ? <strong>{user.email}</strong> : "This account"} was
-            registered on the {theirs} side, so it opens the {theirs} portal —
-            not the {here} one.
+            {user?.email ? <strong>{user.email}</strong> : "This account"} is
+            set up as {other === "learner" ? "a learner" : "an instructor"}.
+            You can have both — same email, same password, nothing else to
+            fill in.
           </p>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-            The two are separate on purpose. If you want both, register a second
-            account from the {here} door with a different email.
+            {wantInstructor
+              ? "You'll be asked for your ADI number afterwards, and a person checks it against the RSA register before any learner can see you."
+              : "The theory questions, mock tests and flashcards, same as any learner gets."}
           </p>
 
-          <a
-            href={go}
-            className="mt-5 w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold py-3 rounded-xl transition"
+          {problem && (
+            <div className="mt-4 flex items-start gap-2 text-sm bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-xl px-3 py-2.5">
+              <AlertCircle size={15} className="mt-0.5 shrink-0" />
+              <span>{problem}</span>
+            </div>
+          )}
+
+          <button
+            onClick={add}
+            disabled={busy}
+            className="mt-5 w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-900 font-bold py-3 rounded-xl transition"
           >
-            Go to my {theirs} portal <ArrowRight size={16} />
-          </a>
+            {busy && <Loader2 size={16} className="animate-spin" />}
+            Add the {label} side
+          </button>
+
+          {/* Where they already belong, for someone who arrived here by
+              mistake rather than by intent. */}
+          {accountRoles.length > 0 && (
+            <a
+              href={elsewhere}
+              className="mt-2 w-full flex items-center justify-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 py-2.5"
+            >
+              Back to my {other} {other === "learner" ? "app" : "portal"} <ArrowRight size={14} />
+            </a>
+          )}
 
           <button
             onClick={signOut}
-            className="mt-2 w-full text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 py-2.5"
+            className="w-full text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 py-2.5"
           >
             Sign out and use a different account
           </button>
@@ -746,7 +807,7 @@ function StudentOnboardingRoute() {
 }
 
 function StudentRoute() {
-  const { journeyStage, claimRole, accountRole, mayUseStudent } = usePlatform();
+  const { journeyStage, claimRole, mayUseStudent } = usePlatform();
   const { loading } = useAuth();
 
   /* Arriving at /student is the answer to "which are you?", the same way
@@ -763,7 +824,7 @@ function StudentRoute() {
 
   /* An instructor's account does not open the learner's app. See platform.jsx
      — this reads the role the database holds, not the one on the device. */
-  if (!mayUseStudent) return <WrongDoor accountRole={accountRole} />;
+  if (!mayUseStudent) return <AddSide side="student" />;
 
   /* Someone who chose "student" but never answered the journey question —
      including everyone who was already using the app before the platform
@@ -774,7 +835,7 @@ function StudentRoute() {
 }
 
 function InstructorRoute() {
-  const { claimRole, accountRole, mayUseInstructor } = usePlatform();
+  const { claimRole, mayUseInstructor } = usePlatform();
   const { loading, isSignedIn } = useAuth();
 
   /* Same as the student side: record the door they came through so /app
@@ -814,7 +875,7 @@ function InstructorRoute() {
   }
 
   /* Signed in, but with a learner's account. */
-  if (!mayUseInstructor) return <WrongDoor accountRole={accountRole} />;
+  if (!mayUseInstructor) return <AddSide side="instructor" />;
 
   return (
     <InstructorPortal

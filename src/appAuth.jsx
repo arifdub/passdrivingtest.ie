@@ -69,6 +69,17 @@ function localUserId(email) {
 /* -------------------------------------------------------------------------
    Provider
    ------------------------------------------------------------------------- */
+/* Mirrors sql/07's primary_role(): the one value profiles.role may hold,
+   given the set. Most privileged wins, so an admin who also teaches still
+   reads as an admin. */
+function primaryRole(roles) {
+  const r = roles || [];
+  if (r.includes("super_admin")) return "super_admin";
+  if (r.includes("admin")) return "admin";
+  if (r.includes("instructor")) return "instructor";
+  return r.length ? "student" : null;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -86,9 +97,10 @@ export function AuthProvider({ children }) {
         email: u.email,
         full_name: u.full_name || "",
         /* Local mode stands in for the database, so it has to stand in for
-           the role too — otherwise the one thing that cannot be tested
+           the roles too — otherwise the one thing that cannot be tested
            without Supabase is the thing most worth testing. */
-        role: u.role || "student",
+        role: u.role || primaryRole(u.roles) || "student",
+        roles: u.roles?.length ? u.roles : [u.role || "student"],
         subscription_status: "active",
         subscription_plan: "free-access",
       });
@@ -220,7 +232,8 @@ export function AuthProvider({ children }) {
         setError(msg);
         return { ok: false, error: msg };
       }
-      const u = { id: localUserId(email), email: key, full_name: fullName || "", role: signupRole };
+      const u = { id: localUserId(email), email: key, full_name: fullName || "",
+                  role: signupRole, roles: [signupRole] };
       users[key] = { ...u, password };
       writeLocal(LOCAL_USERS_KEY, users);
       writeLocal(LOCAL_SESSION_KEY, u);
@@ -264,7 +277,9 @@ export function AuthProvider({ children }) {
         setError(msg);
         return { ok: false, error: msg };
       }
-      const u = { id: found.id, email: found.email, full_name: found.full_name, role: found.role || "student" };
+      const u = { id: found.id, email: found.email, full_name: found.full_name,
+                  role: found.role || "student",
+                  roles: found.roles?.length ? found.roles : [found.role || "student"] };
       writeLocal(LOCAL_SESSION_KEY, u);
       leaveGuest();
       setUser(u);
@@ -350,9 +365,69 @@ export function AuthProvider({ children }) {
     };
   }, [profile]);
 
+  /* ---------------------------------------------------------------------
+     WRITING THE SET OF SIDES THIS ACCOUNT HOLDS
+
+     Lives here rather than in platform.jsx because the account record is
+     this file's, and in local mode there is no row to update — the session
+     and the user list ARE the record. Keeping both modes in one place is
+     what stops local mode quietly diverging from the real thing, which
+     matters because local mode is where the browser suites run.
+
+     It decides nothing about what is allowed. The database does that
+     (sql/07): add or drop 'student' and 'instructor' freely, touch 'admin'
+     and be refused.
+     --------------------------------------------------------------------- */
+  const setAccountRoles = useCallback(async (roles) => {
+    if (!user?.id) return { ok: false, error: "Not signed in." };
+
+    if (!HAS_SUPABASE) {
+      const users = readLocal(LOCAL_USERS_KEY, {});
+      const key = user.email?.toLowerCase();
+      if (users[key]) {
+        users[key] = { ...users[key], roles, role: primaryRole(roles) };
+        writeLocal(LOCAL_USERS_KEY, users);
+      }
+      const next = { ...user, roles, role: primaryRole(roles) };
+      writeLocal(LOCAL_SESSION_KEY, next);
+      setUser(next);
+      await loadProfile(next);
+      return { ok: true, error: null };
+    }
+
+    const { error: err } = await supabase
+      .from("profiles")
+      .update({ roles })
+      .eq("id", user.id);
+
+    if (err) {
+      console.warn("Could not update roles:", err.message);
+      return { ok: false, error: err.message };
+    }
+    await loadProfile(user);
+    return { ok: true, error: null };
+  }, [user, loadProfile]);
+
+  /* Re-reads the profile row. Needed when something other than signing in
+     changes it — adding the instructor side to a learner's account, say. */
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+    if (!HAS_SUPABASE) {
+      /* Local mode has no row to re-read; the session object is the record,
+         and whoever changed it has already updated that. */
+      const session = readLocal(LOCAL_SESSION_KEY, null);
+      if (session) await loadProfile(session);
+      return;
+    }
+    const { data } = await supabase.auth.getUser();
+    await loadProfile(data?.user || user);
+  }, [user, loadProfile]);
+
   const value = useMemo(() => ({
     user,
     profile,
+    refreshProfile,
+    setAccountRoles,
     loading,
     error,
     setError,
@@ -374,7 +449,7 @@ export function AuthProvider({ children }) {
     resetPassword,
     continueAsGuest,
     exitGuest,
-  }), [user, profile, loading, error, subscription, guest, signUp, signIn,
+  }), [refreshProfile, setAccountRoles, user, profile, loading, error, subscription, guest, signUp, signIn,
        signOut, resetPassword, continueAsGuest, exitGuest]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

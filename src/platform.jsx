@@ -167,7 +167,7 @@ function writeLocal(key, value) {
 }
 
 export function PlatformProvider({ children }) {
-  const { user, isSignedIn, profile } = useAuth();
+  const { user, isSignedIn, profile, setAccountRoles } = useAuth();
 
   const [role, setRoleState] = useState(() => readLocal(ROLE_KEY));
   const [journeyStage, setStageState] = useState(() => readLocal(STAGE_KEY));
@@ -268,34 +268,67 @@ export function PlatformProvider({ children }) {
   }, [role, setRole]);
 
   /* ---------------------------------------------------------------------
-     THE ACCOUNT'S ROLE, WHICH IS THE ONE THAT DECIDES ANYTHING
+     WHICH SIDES THIS ACCOUNT HOLDS
 
      `role` above is the device's idea, kept in localStorage: useful before
-     anyone signs in, and worth exactly nothing as a permission, because the
-     browser owns it and anyone can edit it.
+     anyone signs in, and worth nothing as a permission, because the browser
+     owns it and anyone can edit it.
 
-     accountRole is what the database says about this account. A learner and
-     an instructor are different products now — the instructor side will show
-     learners' phone numbers and addresses as soon as bookings exist, and a
-     learner's progress is theirs — so which one an account may open is a
-     question only the server gets to answer.
+     accountRoles is what the database says, and it is a SET. One person
+     learns, teaches, and sends their own kids through the test — an account
+     can hold the learner side, the instructor side, or both. Each is added
+     deliberately; see addSide.
 
-     An admin opens both. That is the point of an admin.
+     Reading profile.roles with profile.role as the fallback, because an
+     account loaded before sql/07 ran has only the old single column and
+     should still work rather than losing its side.
      --------------------------------------------------------------------- */
-  const accountRole =
-    isSignedIn && profile?.role && ROLES.includes(profile.role) ? profile.role : null;
+  const accountRoles = useMemo(() => {
+    if (!isSignedIn || !profile) return [];
+    const list = Array.isArray(profile.roles) && profile.roles.length
+      ? profile.roles
+      : profile.role ? [profile.role] : [];
+    return list.filter(r => ROLES.includes(r));
+  }, [isSignedIn, profile]);
 
-  const isAdminAccount = accountRole === "admin" || accountRole === "super_admin";
+  const hasAccountRole = useCallback(
+    (r) => accountRoles.includes(r), [accountRoles]);
+
+  const isAdminAccount = hasAccountRole("admin") || hasAccountRole("super_admin");
+
+  /* Adds a side to this account. Only ever 'student' or 'instructor' — the
+     database refuses anything else, and so does this.
+
+     Deliberate, not automatic: a learner tapping "For instructors" out of
+     curiosity must not quietly become one, and an instructor glancing at the
+     theory material must not have the learner app appear in their account
+     without asking. One tap, taken by the person it belongs to. */
+  const addSide = useCallback(async (side) => {
+    if (side !== "student" && side !== "instructor") {
+      return { ok: false, error: "Not a side." };
+    }
+    if (accountRoles.includes(side)) return { ok: true, error: null };
+    if (!isSignedIn || !user?.id) {
+      return { ok: false, error: "Sign in first." };
+    }
+
+    /* The write itself belongs to appAuth, which owns the account record in
+       both modes. A failure here is most likely sql/07 not having been run;
+       saying so beats a button that appears to do nothing. */
+    return setAccountRoles([...new Set([...accountRoles, side])]);
+  }, [accountRoles, isSignedIn, user?.id, setAccountRoles]);
 
   const value = useMemo(() => ({
     role,
-    accountRole,
+    accountRoles,
+    hasAccountRole,
     isAdminAccount,
+    addSide,
     /* Not signed in: the student side is open to guests, which is how the
        free study material has always worked. The instructor side has its own
        sign-in gate and never reaches these. */
-    mayUseStudent: !accountRole || accountRole === "student" || isAdminAccount,
-    mayUseInstructor: accountRole === "instructor" || isAdminAccount,
+    mayUseStudent: !isSignedIn || hasAccountRole("student") || isAdminAccount,
+    mayUseInstructor: hasAccountRole("instructor") || isAdminAccount,
     journeyStage,
     stage: journeyStage ? STAGE_BY_ID[journeyStage] || null : null,
     isStudent: role === "student",
@@ -306,8 +339,8 @@ export function PlatformProvider({ children }) {
     claimRole,
     setJourneyStage,
     clearRole,
-  }), [role, accountRole, isAdminAccount, journeyStage, setRole, claimRole,
-       setJourneyStage, clearRole]);
+  }), [role, accountRoles, hasAccountRole, isAdminAccount, addSide, isSignedIn,
+       journeyStage, setRole, claimRole, setJourneyStage, clearRole]);
 
   return (
     <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>
