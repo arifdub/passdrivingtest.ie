@@ -12,7 +12,7 @@ import react from "@vitejs/plugin-react";
   dist/index.html and dist/app/index.html, and Vercel serves /app from the
   second without any rewrite rule — a directory index is a directory index.
 
-  THREE STATIC PAGES, ONE APP
+  TWO STATIC PAGES, ONE BUNDLE, TWO APP DOCUMENTS
 
     /                      index.html                    the front door:
                            what this is, and the two
@@ -20,14 +20,24 @@ import react from "@vitejs/plugin-react";
     /driver-theory-test/   driver-theory-test/index.html the full guide to
                            the Driver Theory Test — the
                            page that ranks
-    /app/                  app/index.html                the React app
+    /app/                  app/index.html                the learner's app
+    /adi                   adi/index.html                the instructor's app
 
-  ONE BUNDLE, FOUR ADDRESSES
+  ONE BUNDLE, FIVE ADDRESSES
 
-  The app is served at /student, /adi, /admin and /app. All four are rewritten
-  to app/index.html (see vercel.json) and the router reads the real path, so
-  an instructor can be sent passdrivingtest.ie/adi and a learner
+  The app is served at /student, /adi, /admin and /app, and every one of them
+  loads the same bundle and the same router, which reads the real path. So an
+  instructor can be sent passdrivingtest.ie/adi and a learner
   passdrivingtest.ie/student without either being a separate build.
+
+  WHY /adi HAS ITS OWN DOCUMENT ANYWAY
+
+  Not for different code — for a different manifest. A manifest belongs to the
+  document that links it and one document can link exactly one, so while /adi
+  and /student were the same file there was one app name, one icon and one
+  start_url between them: an instructor adding the portal to their home screen
+  got an icon called PassDrivingTest that opened the learner's app. /student,
+  /admin and /app still rewrite to app/index.html; only /adi has its own.
 
   /app is kept because home-screen icons point at it: the manifest's start_url
   is /app/, and iOS baked that into every icon already installed. Dropping it

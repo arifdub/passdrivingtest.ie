@@ -35,6 +35,7 @@ import {
 import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
 import { Logo, EmptyState, PrimaryButton } from "../ui";
+import InstructorReview from "./InstructorReview";
 
 const SECTIONS = [
   { id: "overview",    label: "Overview",    icon: LayoutDashboard },
@@ -141,7 +142,9 @@ export default function AdminPortal() {
       </div>
 
       <div className="max-w-6xl mx-auto px-5 py-6 pb-24">
-        {section === "overview" ? <Overview /> : <ComingSoon section={active} />}
+        {section === "overview" ? <Overview />
+          : section === "instructors" ? <InstructorReview />
+          : <ComingSoon section={active} />}
       </div>
     </div>
   );
@@ -160,13 +163,13 @@ function Overview() {
       <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
         <div className="flex items-center gap-2.5">
           <Hammer size={18} className="text-amber-500 shrink-0" />
-          <h2 className="font-bold text-slate-900 dark:text-white">Nothing to administer yet</h2>
+          <h2 className="font-bold text-slate-900 dark:text-white">Instructors can be reviewed now</h2>
         </div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          There are no instructors to approve and no bookings to settle,
-          because registration and booking aren't built. These tiles stay blank
-          rather than showing invented figures — the numbers on an admin screen
-          are the ones people make decisions on.
+          Registration and ADI verification are built — the Instructors tab is
+          the queue, with the counts on it. Bookings and payments are not, so
+          those tiles stay blank rather than showing invented figures: the
+          numbers on an admin screen are the ones people make decisions on.
         </p>
       </div>
 
@@ -176,9 +179,15 @@ function Overview() {
           <li className="flex gap-2.5">
             <span className="text-emerald-500 font-black shrink-0">1</span>
             <span>
-              Run <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">sql/03-roles-and-journey.sql</code>,
-              which adds the role column and the trigger stopping a client from
-              granting itself admin.
+              Run the SQL files in order —
+              <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded mx-1">03</code>
+              roles,
+              <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded mx-1">04</code>
+              instructor profiles,
+              <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded mx-1">05</code>
+              account separation,
+              <code className="text-xs bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded mx-1">06</code>
+              the permission that lets this screen verify anyone.
             </span>
           </li>
           <li className="flex gap-2.5">
@@ -187,15 +196,17 @@ function Overview() {
               Promote your own account from the Supabase SQL editor — the only
               route in, by design:
               <code className="block mt-1.5 text-xs bg-slate-100 dark:bg-slate-900 p-2 rounded overflow-x-auto">
-                update profiles set role = 'super_admin' where email = 'you@example.com';
+                update public.profiles set role = 'super_admin' where id = (select id from auth.users where email = 'you@example.com');
               </code>
             </span>
           </li>
           <li className="flex gap-2.5">
             <span className="text-emerald-500 font-black shrink-0">3</span>
             <span>
-              Every action added here must be enforced again in RLS or an Edge
-              Function. This screen's check is a courtesy, not a boundary.
+              Every action added here must be enforced again in RLS or a
+              trigger. This screen's check is a courtesy, not a boundary —
+              verifying an instructor is allowed by sql/06, and refused there
+              for anyone who isn't an admin, including on their own row.
             </span>
           </li>
         </ul>
