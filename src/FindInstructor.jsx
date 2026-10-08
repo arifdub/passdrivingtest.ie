@@ -179,6 +179,7 @@ export default function FindInstructor({ onBack }) {
               rating={ratings[row.user_id]}
               myReview={myReviews[row.user_id]}
               canReview={!!reviewable[row.user_id]}
+              isMe={row.user_id === user?.id}
               onReview={() => setReviewing(row)}
             />
           ))}
@@ -233,7 +234,7 @@ function Chip({ on, onClick, children }) {
   );
 }
 
-function InstructorCard({ row, enquiry, isGuest, onAsk, onBook, rating, myReview, canReview, onReview }) {
+function InstructorCard({ row, enquiry, isGuest, onAsk, onBook, rating, myReview, canReview, isMe, onReview }) {
   const rate = euro(row.hourly_rate_cents);
   const edt = euro(row.edt_rate_cents);
 
@@ -277,7 +278,17 @@ function InstructorCard({ row, enquiry, isGuest, onAsk, onBook, rating, myReview
           Asking stays, because an instructor with no availability set — or a
           learner who wants to talk first — still needs a way in. */}
       <div className="mt-4 space-y-2">
-        {isGuest ? (
+        {/* An account can hold both sides (sql/07), so an instructor browsing
+            the directory as a learner sees their own card. Offering them Book
+            leads to a refusal from the database — "You cannot book yourself"
+            — after they have picked a time and typed an address, which is a
+            pointless journey to a dead end. Say it on the card instead. */}
+        {isMe ? (
+          <p className="rounded-xl bg-slate-100 dark:bg-slate-900/60 p-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            This is your own listing — this is how learners see you. To change
+            it, open the instructor portal.
+          </p>
+        ) : isGuest ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Create a free account to book a lesson or get in touch.
           </p>

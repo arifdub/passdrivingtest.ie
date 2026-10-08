@@ -298,3 +298,69 @@ begin
     exists (select 1 from public.open_slots(adi, current_date + 5, 1) s where s.slot = pg_temp.slot(14)),
     'a declined hour goes back into the open slots');
 end $$;
+
+-- --------------------------------------------------------------------------
+-- An instructor verified AFTER the migrations ran
+--
+-- sql/11 backfilled a booking-rules row for everyone who existed at the
+-- time, and nothing created another. open_slots gave up when the row was
+-- missing, so an instructor who listed themselves the next day was
+-- permanently unbookable: directory showed them, hours were set, slot list
+-- empty, no explanation anywhere. sql/14 fixes it twice over.
+-- --------------------------------------------------------------------------
+do $$
+declare
+  nw constant uuid := '44444444-4444-4444-4444-444444444444';
+begin
+  -- Set up as the SQL editor would, not as a signed-in learner: sql/04
+  -- refuses a profile created already-verified from the client, which is
+  -- correct and is tested elsewhere. Earlier blocks left the role as
+  -- 'authenticated', so it is put back deliberately.
+  perform set_config('request.jwt.claim.role', 'service_role', false);
+  perform set_config('request.jwt.claim.sub', '', false);
+
+  insert into auth.users (id, email) values (nw, 'later@example.com') on conflict do nothing;
+  insert into public.profiles (id) values (nw) on conflict do nothing;
+
+  delete from public.instructor_booking_rules where instructor_id = nw;
+  delete from public.instructor_hours where instructor_id = nw;
+  delete from public.instructor_profiles where user_id = nw;
+
+  insert into public.instructor_profiles
+    (user_id, full_name, adi_number, verification_status, listed, hourly_rate_cents,
+     counties, lesson_types, transmissions)
+  values (nw, 'Later Byrne', '50001', 'verified', true, 4000,
+          array['Dublin'], array['lesson'], array['manual']);
+
+  perform pg_temp.report(
+    exists (select 1 from public.instructor_booking_rules where instructor_id = nw),
+    'a new instructor profile gets its booking rules automatically');
+
+  insert into public.instructor_hours (instructor_id, weekday, starts_at, ends_at)
+  select nw, d, '09:00', '17:00' from generate_series(0,6) d;
+
+  perform pg_temp.report(
+    (select count(*) from public.open_slots(nw, current_date, 14)) > 0,
+    'and is bookable');
+
+  -- Even with the row gone entirely, silence must not read as a refusal.
+  delete from public.instructor_booking_rules where instructor_id = nw;
+  perform pg_temp.report(
+    (select count(*) from public.open_slots(nw, current_date, 14)) > 0,
+    'no rules row at all falls back to the standard terms');
+
+  -- But an explicit pause still stops everything.
+  insert into public.instructor_booking_rules (instructor_id, accepting)
+  values (nw, false)
+  on conflict (instructor_id) do update set accepting = false;
+  perform pg_temp.report(
+    (select count(*) from public.open_slots(nw, current_date, 14)) = 0,
+    'an explicit pause still stops the slots');
+
+  -- And the screen can tell those apart.
+  update public.instructor_booking_rules set accepting = true where instructor_id = nw;
+  delete from public.instructor_hours where instructor_id = nw;
+  perform pg_temp.report(
+    (select has_hours = false and listed = true from public.booking_availability(nw)),
+    'booking_availability says it is missing hours, not unlisted');
+end $$;

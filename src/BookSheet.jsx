@@ -26,14 +26,24 @@ import {
 } from "lucide-react";
 import { PrimaryButton, SecondaryButton } from "./ui";
 import {
-  openSlots, requestBooking, slotsByDay, slotTime, slotDay,
+  openSlots, requestBooking, whyNoSlots, slotsByDay, slotTime, slotDay,
 } from "./bookingStore";
 import { LESSON_LABELS, euro } from "./marketplace";
 
 export default function BookSheet({ instructor, onClose, onBooked }) {
   const [days, setDays] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  /* Two different errors, deliberately kept apart.
+
+     `loadError` is the slot list failing to arrive. `requestError` is the
+     answer to something the person just did — "someone just took that time",
+     "that is outside their working hours". They were one variable, and
+     refusing a booking then reloading the slots overwrote the refusal with
+     null before anyone could read it. The request appeared to do nothing at
+     all, which is the worst way to tell somebody no. */
+  const [loadError, setLoadError] = useState(null);
+  const [requestError, setRequestError] = useState(null);
+  const [why, setWhy] = useState(null);
   const [picked, setPicked] = useState(null);
   const [kind, setKind] = useState((instructor.lesson_types || [])[0] || "lesson");
   const [pickup, setPickup] = useState("");
@@ -45,7 +55,10 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
     setLoading(true);
     const { rows, error: e } = await openSlots(instructor.user_id, { days: 14 });
     setDays(slotsByDay(rows));
-    setError(e);
+    setLoadError(e);
+    /* Only asked when there is nothing to show. It costs a round trip and
+       answers a question nobody has when the list is full. */
+    setWhy(rows.length ? null : await whyNoSlots(instructor.user_id));
     setLoading(false);
   }, [instructor.user_id]);
 
@@ -90,6 +103,17 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
               Their open hours for the next two weeks.
             </p>
 
+            {/* The answer to the last attempt, kept at the top where the eye
+                already is, and not cleared by reloading the list. */}
+            {requestError && (
+              <div className="mt-3 rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3.5 flex items-start gap-2">
+                <AlertCircle size={15} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                  {requestError}
+                </p>
+              </div>
+            )}
+
             {/* Lesson type ------------------------------------------------ */}
             {(instructor.lesson_types || []).length > 1 && (
               <div className="mt-4">
@@ -120,12 +144,16 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
                 <div className="flex items-center gap-2.5 text-sm text-slate-500 dark:text-slate-400 py-8 justify-center">
                   <Loader2 size={16} className="animate-spin" /> Checking their calendar…
                 </div>
-              ) : error ? (
-                <Note tone="amber">{error}</Note>
+              ) : loadError ? (
+                <Note tone="amber">{loadError}</Note>
               ) : !days.length ? (
+                /* An empty slot list has several causes and the learner can
+                   act on none of them, so say what it means rather than just
+                   that it is empty, and point at the thing they CAN do. */
                 <Note tone="slate">
-                  Nothing open in the next two weeks. Ask them about lessons
-                  instead and they'll get back to you.
+                  <strong className="text-slate-900 dark:text-white">{emptyReason(why)}</strong>{" "}
+                  Close this and use <strong>Ask about lessons</strong> — that
+                  reaches them whatever their calendar says.
                 </Note>
               ) : (
                 <div className="space-y-3">
@@ -201,18 +229,21 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
                   <PrimaryButton
                     disabled={sending}
                     onClick={async () => {
-                      setSending(true); setError(null);
+                      setSending(true); setRequestError(null);
                       const r = await requestBooking({
                         instructorId: instructor.user_id,
                         at: picked, kind, pickup, note,
                       });
                       setSending(false);
                       if (r.ok) { setDone(true); return; }
-                      setError(r.error);
-                      /* Whatever went wrong, the slot list is now suspect —
-                         most of all when somebody else took the hour. */
+
+                      /* Set AFTER the reload is kicked off, and in its own
+                         variable, so refreshing the slots cannot erase the
+                         reason. Whatever went wrong, the list is now suspect
+                         — most of all when somebody else took the hour. */
                       setPicked(null);
-                      refresh();
+                      await refresh();
+                      setRequestError(r.error);
                     }}
                   >
                     {sending ? "Sending…" : "Request this lesson"}
@@ -228,6 +259,18 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
       </div>
     </div>
   );
+}
+
+/* One sentence per cause, because a learner reads "nothing available" and
+   concludes the site is broken. Only the last of these is about the
+   instructor being busy; the rest are about them not having finished setting
+   up, which is worth saying differently. */
+export function emptyReason(why) {
+  if (!why) return "No open hours in the next two weeks.";
+  if (!why.listed) return "This instructor isn't taking bookings here at the moment.";
+  if (!why.accepting) return "They've paused new bookings for now.";
+  if (!why.hasHours) return "They haven't set their working hours yet.";
+  return "They're fully booked for the next two weeks.";
 }
 
 function Note({ tone, children }) {

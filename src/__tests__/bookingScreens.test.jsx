@@ -71,3 +71,34 @@ describe("how a request reads once its hour has gone", () => {
     expect(isPast(soon)).toBe(false);
   });
 });
+
+/* ------------------------------------------------------------------------- */
+/* Why a slot list is empty                                                   */
+/* ------------------------------------------------------------------------- */
+
+const { emptyReason } = await import("../BookSheet");
+
+describe("an empty slot list explains itself", () => {
+  it("distinguishes the four causes that all arrive as zero rows", () => {
+    /* These used to be one sentence. A learner reads "nothing available",
+       concludes the site is broken, and leaves — when three of the four are
+       the instructor not having finished setting up. */
+    expect(emptyReason({ listed: false, accepting: true, hasHours: true, openCount: 0 }))
+      .toMatch(/isn't taking bookings/i);
+    expect(emptyReason({ listed: true, accepting: false, hasHours: true, openCount: 0 }))
+      .toMatch(/paused/i);
+    expect(emptyReason({ listed: true, accepting: true, hasHours: false, openCount: 0 }))
+      .toMatch(/haven't set their working hours/i);
+    expect(emptyReason({ listed: true, accepting: true, hasHours: true, openCount: 0 }))
+      .toMatch(/fully booked/i);
+  });
+
+  it("falls back to a plain statement when it cannot tell", () => {
+    /* null means the question could not be asked — sql/14 missing, say —
+       which is not the same as nothing being wrong, so it must not claim
+       a specific cause. */
+    const r = emptyReason(null);
+    expect(r).toMatch(/no open hours/i);
+    expect(r).not.toMatch(/paused|fully booked|haven't set/i);
+  });
+});

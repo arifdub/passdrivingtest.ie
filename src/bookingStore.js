@@ -82,6 +82,32 @@ export async function openSlots(instructorId, { from = new Date(), days = 14 } =
   return { rows: (data || []).map(r => new Date(r.slot ?? r)), error: null };
 }
 
+/* Why there are no slots. Four very different situations arrive at the
+   screen as the same empty array — not listed, paused, no hours set, fully
+   booked — and a learner can act on only some of them. Asked separately so
+   the screen can say which rather than shrug.
+
+   Returns null when it cannot tell, which is distinct from "nothing is
+   wrong": sql/14 may not have been run. */
+export async function whyNoSlots(instructorId) {
+  if (!HAS_SUPABASE || !instructorId) return null;
+
+  const { data, error } = await supabase.rpc("booking_availability", {
+    p_instructor: instructorId,
+  });
+  if (error) return null;
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+
+  return {
+    listed: !!row.listed,
+    accepting: !!row.accepting,
+    hasHours: !!row.has_hours,
+    openCount: Number(row.open_count) || 0,
+  };
+}
+
 export async function requestBooking({ instructorId, at, kind, pickup, note }) {
   if (!HAS_SUPABASE || !instructorId || !at) return no();
 
