@@ -416,8 +416,13 @@ export function Preview({ hours, timeOff, rules, lessons }) {
                 {date.toLocaleDateString("en-IE", { weekday: "short", day: "numeric" })}
               </p>
               {slots.length ? (
-                <div className="flex flex-wrap gap-1">
-                  {slots.map(s => (
+                /* Capped. Seven days of seventeen half-hour slots is 119
+                   chips, and this is a mirror — the instructor is checking
+                   that their week looks right, not reading every time. The
+                   first few and a count says that in a glance; the full list
+                   said it in a scroll. */
+                <div className="flex flex-wrap items-center gap-1">
+                  {slots.slice(0, 6).map(s => (
                     <span
                       key={s.time}
                       className="rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 text-[11px] font-bold tabular-nums"
@@ -425,6 +430,11 @@ export function Preview({ hours, timeOff, rules, lessons }) {
                       {s.time}
                     </span>
                   ))}
+                  {slots.length > 6 && (
+                    <span className="text-[11px] font-bold text-slate-400 tabular-nums">
+                      +{slots.length - 6} more
+                    </span>
+                  )}
                 </div>
               ) : (
                 <p className="pt-1 text-xs text-slate-400">—</p>

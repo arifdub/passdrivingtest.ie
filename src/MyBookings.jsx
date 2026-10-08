@@ -161,7 +161,7 @@ export default function MyBookings({ learnerId }) {
               <button
                 onClick={() => { setTalking(null); refresh(); }}
                 aria-label="Close"
-                className="shrink-0 text-slate-400 p-1"
+                className="shrink-0 -mr-2 -mt-1 text-slate-400 p-3"
               >
                 <X size={20} />
               </button>

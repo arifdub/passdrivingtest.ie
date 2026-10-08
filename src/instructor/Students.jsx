@@ -305,7 +305,7 @@ export function Sheet({ title, children, onClose }) {
       >
         <div className="flex items-start justify-between gap-3 mb-4">
           <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="shrink-0 text-slate-400 p-1">
+          <button onClick={onClose} aria-label="Close" className="shrink-0 -mr-2 -mt-1 text-slate-400 p-3">
             <X size={20} />
           </button>
         </div>

@@ -110,3 +110,21 @@ html.dark body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   A scrolling row without the bar
+
+   Used by the horizontal chip rows — lesson types, days — where the content
+   itself makes it obvious there is more to the right, and a scrollbar track
+   under a row of 44px buttons eats a third of the touch target on the
+   phones that draw one.
+
+   Both vendor forms, because Firefox and WebKit have never agreed on this.
+   --------------------------------------------------------------------------- */
+.no-scrollbar {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* old Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;                  /* Safari, Chrome */
+}

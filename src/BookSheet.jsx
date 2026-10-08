@@ -45,6 +45,7 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
   const [requestError, setRequestError] = useState(null);
   const [why, setWhy] = useState(null);
   const [picked, setPicked] = useState(null);
+  const [dayKey, setDayKey] = useState(null);
   const [kind, setKind] = useState((instructor.lesson_types || [])[0] || "lesson");
   const [pickup, setPickup] = useState("");
   const [note, setNote] = useState("");
@@ -59,6 +60,10 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
     /* Only asked when there is nothing to show. It costs a round trip and
        answers a question nobody has when the list is full. */
     setWhy(rows.length ? null : await whyNoSlots(instructor.user_id));
+    /* Land on a day that has something in it, and keep the one they were
+       looking at if it survived the reload. */
+    const grouped = slotsByDay(rows);
+    setDayKey(prev => (prev && grouped.some(g => g.key === prev)) ? prev : grouped[0]?.key ?? null);
     setLoading(false);
   }, [instructor.user_id]);
 
@@ -79,7 +84,7 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
           <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">
             {done ? "Request sent" : `Book with ${instructor.full_name || "this instructor"}`}
           </h2>
-          <button onClick={onClose} aria-label="Close" className="shrink-0 text-slate-400 p-1">
+          <button onClick={onClose} aria-label="Close" className="shrink-0 -mr-2 -mt-1 text-slate-400 p-3">
             <X size={20} />
           </button>
         </div>
@@ -120,20 +125,26 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
                   Lesson
                 </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {(instructor.lesson_types || []).map(t => (
-                    <button
-                      key={t}
-                      onClick={() => setKind(t)}
-                      className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
-                        kind === t
-                          ? "bg-emerald-500 text-slate-900"
-                          : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                      }`}
-                    >
-                      {LESSON_LABELS[t] || t}
-                    </button>
-                  ))}
+                {/* One scrolling row rather than wrapping. Five lesson types
+                    wrapped to two lines and pushed the times off the first
+                    screen, which is the thing people came for. */}
+                <div className="mt-2 -mx-6 px-6 overflow-x-auto no-scrollbar">
+                  <div className="flex gap-2 w-max pb-1">
+                    {(instructor.lesson_types || []).map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setKind(t)}
+                        aria-pressed={kind === t}
+                        className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold whitespace-nowrap transition ${
+                          kind === t
+                            ? "bg-emerald-500 text-slate-900"
+                            : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                        }`}
+                      >
+                        {LESSON_LABELS[t] || t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -156,33 +167,72 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
                   reaches them whatever their calendar says.
                 </Note>
               ) : (
-                <div className="space-y-3">
-                  {days.map(d => (
-                    <div key={d.key} className="flex items-start gap-3">
-                      <p className="w-20 shrink-0 pt-1.5 text-xs font-bold uppercase tracking-widest text-slate-400">
-                        {slotDay(d.date)}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {d.slots.map(at => {
-                          const on = picked && picked.getTime() === at.getTime();
-                          return (
-                            <button
-                              key={at.toISOString()}
-                              onClick={() => setPicked(at)}
-                              className={`rounded-lg px-2.5 py-1.5 text-xs font-bold tabular-nums transition ${
-                                on
-                                  ? "bg-emerald-500 text-slate-900"
-                                  : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                              }`}
-                            >
-                              {slotTime(at)}
-                            </button>
-                          );
-                        })}
-                      </div>
+                /* DAY FIRST, THEN TIME.
+
+                   Every day used to be expanded at once: fourteen days of
+                   seventeen half-hour slots is well over a hundred chips, and
+                   on a phone that is a wall you scroll past rather than a
+                   choice you make. Nobody wants a time before they want a day.
+
+                   So the days are one scrolling row with their slot counts,
+                   and only the chosen day's times are drawn — in a grid with
+                   tap targets big enough to hit while walking. */
+                <>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    Day
+                  </p>
+                  <div className="mt-2 -mx-6 px-6 overflow-x-auto no-scrollbar">
+                    <div className="flex gap-2 w-max pb-1">
+                      {days.map(d => {
+                        const on = d.key === dayKey;
+                        return (
+                          <button
+                            key={d.key}
+                            onClick={() => { setDayKey(d.key); setPicked(null); }}
+                            aria-pressed={on}
+                            className={`shrink-0 rounded-2xl px-4 py-2.5 text-center transition ${
+                              on
+                                ? "bg-emerald-500 text-slate-900"
+                                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                            }`}
+                          >
+                            <span className="block text-sm font-black whitespace-nowrap">
+                              {slotDay(d.date)}
+                            </span>
+                            <span className={`block text-[11px] font-bold tabular-nums ${
+                              on ? "text-slate-900/70" : "text-slate-500 dark:text-slate-400"
+                            }`}>
+                              {d.slots.length} free
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  </div>
+
+                  <p className="mt-4 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    Time
+                  </p>
+                  <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {(days.find(d => d.key === dayKey)?.slots || []).map(at => {
+                      const on = picked && picked.getTime() === at.getTime();
+                      return (
+                        <button
+                          key={at.toISOString()}
+                          onClick={() => setPicked(at)}
+                          aria-pressed={on}
+                          className={`rounded-xl py-3 text-sm font-bold tabular-nums transition ${
+                            on
+                              ? "bg-emerald-500 text-slate-900 ring-2 ring-emerald-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-800"
+                              : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                          }`}
+                        >
+                          {slotTime(at)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
 

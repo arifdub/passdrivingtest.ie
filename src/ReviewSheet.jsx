@@ -31,7 +31,7 @@ export default function ReviewSheet({ instructor, learnerId, existing, onClose, 
           <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">
             {existing ? "Update your review" : `Review ${instructor.full_name || "your instructor"}`}
           </h2>
-          <button onClick={onClose} aria-label="Close" className="shrink-0 text-slate-400 p-1">
+          <button onClick={onClose} aria-label="Close" className="shrink-0 -mr-2 -mt-1 text-slate-400 p-3">
             <X size={20} />
           </button>
         </div>
