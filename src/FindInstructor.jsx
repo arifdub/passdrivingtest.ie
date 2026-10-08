@@ -30,7 +30,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Search, MapPin, Car, BadgeCheck, Loader2, AlertCircle, Check, X,
-  MessageSquare, SlidersHorizontal, CalendarCheck,
+  MessageSquare, SlidersHorizontal, CalendarCheck, Star,
 } from "lucide-react";
 import { useAuth } from "./appAuth";
 import { ScreenHeader, EmptyState, PrimaryButton, SecondaryButton } from "./ui";
@@ -40,6 +40,9 @@ import {
 } from "./marketplace";
 import BookSheet from "./BookSheet";
 import MyBookings from "./MyBookings";
+import ReviewSheet from "./ReviewSheet";
+import { ratingsFor, ratingLabel, listReviews, canReview } from "./socialStore";
+import { myBookings } from "./bookingStore";
 
 export default function FindInstructor({ onBack }) {
   const { user, isGuest, displayName } = useAuth();
@@ -52,6 +55,12 @@ export default function FindInstructor({ onBack }) {
   const [error, setError] = useState(null);
   const [asking, setAsking] = useState(null);
   const [booking, setBooking] = useState(null);
+  const [reviewing, setReviewing] = useState(null);
+  /* Ratings and the learner's own reviews, fetched once for the whole page
+     rather than once per card. */
+  const [ratings, setRatings] = useState({});
+  const [myReviews, setMyReviews] = useState({});
+  const [reviewable, setReviewable] = useState({});
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -66,6 +75,43 @@ export default function FindInstructor({ onBack }) {
   }, [county, user?.id]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  /* Ratings for whatever is on screen, plus — for this learner only — which
+     instructors they may review and whether they already have.
+
+     Eligibility is asked of the database, but only for the handful of
+     instructors the learner has ever booked with. Asking for all fifty cards
+     would be fifty round trips to answer "no" forty-eight times, and a
+     learner cannot have completed a lesson with someone they never booked.
+     The button appearing is a convenience; the trigger in sql/13 is the
+     rule, and it is checked again on write. */
+  useEffect(() => {
+    let off = false;
+    const ids = rows.map(r => r.user_id);
+    if (!ids.length) return;
+
+    (async () => {
+      const map = await ratingsFor(ids);
+      if (!off) setRatings(map);
+      if (!user?.id) return;
+
+      const { rows: mine } = await myBookings(user.id);
+      const known = new Set(mine.map(b => b.instructor_id).filter(id => ids.includes(id)));
+      if (!known.size) return;
+
+      const can = {}, written = {};
+      await Promise.all([...known].map(async id => {
+        if (await canReview(id, user.id)) can[id] = true;
+        const { rows: rs } = await listReviews(id);
+        const own = (rs || []).find(r => r.learner_id === user.id);
+        if (own) written[id] = own;
+      }));
+
+      if (!off) { setReviewable(can); setMyReviews(written); }
+    })();
+
+    return () => { off = true; };
+  }, [rows, user?.id]);
   useEffect(() => { countiesWithInstructors().then(setCounties); }, []);
 
   return (
@@ -130,10 +176,24 @@ export default function FindInstructor({ onBack }) {
               isGuest={isGuest}
               onAsk={() => setAsking(row)}
               onBook={() => setBooking(row)}
+              rating={ratings[row.user_id]}
+              myReview={myReviews[row.user_id]}
+              canReview={!!reviewable[row.user_id]}
+              onReview={() => setReviewing(row)}
             />
           ))}
         </div>
       </div>
+
+      {reviewing && (
+        <ReviewSheet
+          instructor={reviewing}
+          learnerId={user?.id}
+          existing={myReviews[reviewing.user_id]}
+          onClose={() => setReviewing(null)}
+          onSaved={async () => { setReviewing(null); await refresh(); }}
+        />
+      )}
 
       {booking && (
         <BookSheet
@@ -173,7 +233,7 @@ function Chip({ on, onClick, children }) {
   );
 }
 
-function InstructorCard({ row, enquiry, isGuest, onAsk, onBook }) {
+function InstructorCard({ row, enquiry, isGuest, onAsk, onBook, rating, myReview, canReview, onReview }) {
   const rate = euro(row.hourly_rate_cents);
   const edt = euro(row.edt_rate_cents);
 
@@ -192,6 +252,8 @@ function InstructorCard({ row, enquiry, isGuest, onAsk, onBook }) {
           <BadgeCheck size={12} /> Verified
         </span>
       </div>
+
+      <Rating r={rating} />
 
       <dl className="mt-3 space-y-1.5 text-sm">
         <Row icon={MapPin} value={(row.counties || []).join(", ")} />
@@ -227,6 +289,16 @@ function InstructorCard({ row, enquiry, isGuest, onAsk, onBook }) {
               </span>
             </PrimaryButton>
 
+            {/* Only after a lesson they actually completed. */}
+            {canReview && (
+              <button
+                onClick={onReview}
+                className="w-full text-sm font-bold text-emerald-700 dark:text-emerald-400 hover:underline py-1"
+              >
+                {myReview ? "Update your review" : "Leave a review"}
+              </button>
+            )}
+
             {enquiry ? (
               <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
                 <Check size={15} />
@@ -244,6 +316,33 @@ function InstructorCard({ row, enquiry, isGuest, onAsk, onBook }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/* The count is never left off. "4.9" and "4.9 from 3 reviews" say different
+   things, and an instructor with two glowing reviews is not a 5.0 — so below
+   the threshold the average is withheld and only the count is shown. */
+function Rating({ r }) {
+  const label = ratingLabel(r);
+  if (!label.count) return null;
+
+  return (
+    <div className="mt-1.5 flex items-center gap-1.5">
+      {label.average !== null && (
+        <span className="inline-flex gap-0.5">
+          {[1, 2, 3, 4, 5].map(n => (
+            <Star
+              key={n}
+              size={13}
+              className={n <= Math.round(label.average)
+                ? "text-amber-400 fill-amber-400"
+                : "text-slate-300 dark:text-slate-600"}
+            />
+          ))}
+        </span>
+      )}
+      <span className="text-xs text-slate-500 dark:text-slate-400">{label.text}</span>
     </div>
   );
 }

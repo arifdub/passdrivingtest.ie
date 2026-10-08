@@ -25,10 +25,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard, Calendar, Users, CalendarCheck, Clock, Store,
   Wallet, Star, MessageSquare, UserCircle, Hammer,
-  ShieldCheck, ShieldAlert, Clock3, Loader2, Pencil,
+  ShieldCheck, ShieldAlert, Clock3, Loader2, Pencil, Bell,
 } from "lucide-react";
 import {
-  Logo, EmptyState, PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge,
+  Logo, PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge,
 } from "../ui";
 import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
@@ -40,9 +40,14 @@ import Students from "./Students";
 import CalendarScreen from "./Calendar";
 import Availability from "./Availability";
 import Bookings from "./Bookings";
+import Marketplace from "./Marketplace";
+import Earnings from "./Earnings";
+import Reviews from "./Reviews";
+import Messages from "./Messages";
 import Account from "./Account";
 import { receivedEnquiries } from "../marketplace";
 import { receivedBookings, isPast } from "../bookingStore";
+import { whatIsWaiting, waitingTotal } from "../socialStore";
 import { listLessons, listStudents } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
@@ -68,27 +73,6 @@ const SECTIONS = [
   { id: "messages",     label: "Messages",     icon: MessageSquare },
 ];
 
-/* What each section will be, said once, in the section itself. These are
-   promises the schema already has a shape for — not marketing copy. */
-const COMING = {
-  marketplace: {
-    title: "Marketplace",
-    message: "New-student enquiries, and the empty-slot tool that offers an unbooked hour to learners waiting nearby.",
-  },
-  earnings: {
-    title: "Earnings and payouts",
-    message: "What you've earned, what the platform took, and when it lands in your account.",
-  },
-  reviews: {
-    title: "Reviews",
-    message: "Reviews from students who actually completed a lesson with you, and your replies to them.",
-  },
-  messages: {
-    title: "Messages",
-    message: "Talk to students about a booking without handing over your personal number.",
-  },
-};
-
 export default function InstructorPortal({ onExitRole }) {
   const { user, signOut } = useAuth();
   const { accountRoles, isAdminAccount } = usePlatform();
@@ -101,6 +85,7 @@ export default function InstructorPortal({ onExitRole }) {
   const [profile, setProfile] = useState(null);
   const [draft, setDraft] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [waiting, setWaiting] = useState(null);
 
   /* The account's row wins; the local draft is the fallback for someone who
      started registering before signing in, or whose table isn't created yet. */
@@ -113,6 +98,23 @@ export default function InstructorPortal({ onExitRole }) {
   }, [user?.id]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  /* What wants an answer, re-asked every couple of minutes while the portal
+     is open — and only while it is. There is no push here: a phone in a
+     pocket will not light up, because that needs a service worker and VAPID
+     keys on a server. The bell says what it knows and the panel behind it
+     says what it cannot do. */
+  useEffect(() => {
+    if (!user?.id) return;
+    let off = false;
+    const tick = async () => {
+      const { counts } = await whatIsWaiting();
+      if (!off) setWaiting(counts);
+    };
+    tick();
+    const id = setInterval(tick, 120000);
+    return () => { off = true; clearInterval(id); };
+  }, [user?.id, section]);
 
   const status = profile?.verification_status
     || (draft ? "draft" : null);
@@ -128,8 +130,6 @@ export default function InstructorPortal({ onExitRole }) {
     );
   }
 
-  const active = SECTIONS.find(s => s.id === section) || SECTIONS[0];
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       {/* Header */}
@@ -143,6 +143,11 @@ export default function InstructorPortal({ onExitRole }) {
             {/* Switch changes side without signing out; sign out ends the
                 session. Both live here because this screen has no Settings
                 to hide them in. */}
+            <div className="flex items-center gap-1">
+            <NotificationBell
+              counts={waiting}
+              onGo={(to) => setSection(to)}
+            />
             <AccountMenu
               email={user?.email}
               portals={portalsFor({ accountRoles, isAdminAccount, here: "instructor" })}
@@ -150,6 +155,7 @@ export default function InstructorPortal({ onExitRole }) {
               switchLabel="Back to the site"
               onSignOut={signOut}
             />
+            </div>
           </div>
           <h1 className="mt-3 text-xl font-black tracking-tight">Instructor portal</h1>
           <p className="text-sm text-slate-400">
@@ -205,6 +211,15 @@ export default function InstructorPortal({ onExitRole }) {
           : section === "bookings" ? (
               <Bookings onAccepted={() => setSection("calendar")} />
             )
+          : section === "marketplace" ? (
+              <Marketplace
+                onOpenAccount={() => setSection("account")}
+                onOpenAvailability={() => setSection("availability")}
+              />
+            )
+          : section === "earnings" ? <Earnings />
+          : section === "reviews" ? <Reviews />
+          : section === "messages" ? <Messages />
           : section === "account" ? (
               <Account
                 loading={loading}
@@ -214,7 +229,7 @@ export default function InstructorPortal({ onExitRole }) {
                 onRegister={() => setRegistering(true)}
               />
             )
-          : <ComingSoon section={active} />}
+          : null}
       </div>
     </div>
   );
@@ -375,26 +390,22 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
 
       <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
         <h2 className="font-bold text-slate-900 dark:text-white">
-          How the fee will work
+          Money doesn't come through here
         </h2>
-        <ul className="mt-3 space-y-2.5 text-sm text-slate-600 dark:text-slate-300">
-          <li className="flex gap-2.5">
-            <span className="font-black text-emerald-500 shrink-0">€0</span>
-            <span>
-              <strong className="text-slate-900 dark:text-white">Your own students.</strong>{" "}
-              Students you already teach and add yourself carry no acquisition
-              fee, ever. The calendar is just a tool for you.
-            </span>
-          </li>
-          <li className="flex gap-2.5">
-            <span className="font-black text-blue-500 shrink-0">%</span>
-            <span>
-              <strong className="text-slate-900 dark:text-white">Marketplace students.</strong>{" "}
-              A platform fee applies only to learners the marketplace brings
-              you — set centrally, shown before you accept, never a surprise.
-            </span>
-          </li>
-        </ul>
+        {/* This used to describe a commission on marketplace students. There
+            isn't one, and describing a fee that is not being charged is the
+            kind of thing an instructor reads once and remembers wrong for a
+            year. Said plainly instead, with what would happen if it ever
+            changed. */}
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Learners pay you directly, the way they already do. No card is taken
+          on this site, nothing is held, and the platform takes nothing — not
+          from your own students and not from the ones the directory sends you.
+        </p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          If that ever changes you'll be told here first, before it applies,
+          and it won't apply to anything already booked.
+        </p>
       </div>
     </>
   );
@@ -565,15 +576,98 @@ function Stat({ label, value, note }) {
   );
 }
 
-function ComingSoon({ section }) {
-  const copy = COMING[section.id];
+
+/* ---------------------------------------------------------------------------
+   THE BELL
+
+   Counts the three things that want an answer: booking requests, new
+   enquiries, unread messages. Lessons today are shown but not counted into
+   the badge — a lesson is not waiting on a reply, and counting it would mean
+   the badge never clears on a working day.
+
+   IT SAYS WHAT IT CANNOT DO
+
+   This is not a push notification and the panel says so in as many words.
+   Nothing here reaches a phone with the app closed: that needs a service
+   worker, a push subscription and VAPID keys held on a server, none of which
+   exist yet. Leaving that unsaid would have an instructor put their phone
+   down expecting it to buzz when a booking arrives, and miss it.
+   --------------------------------------------------------------------------- */
+function NotificationBell({ counts, onGo }) {
+  const [open, setOpen] = useState(false);
+  const total = waitingTotal(counts);
+
+  const items = [
+    { n: counts?.bookingRequests, to: "bookings",  label: "booking request",  plural: "booking requests" },
+    { n: counts?.newEnquiries,    to: "enquiries", label: "new enquiry",      plural: "new enquiries" },
+    { n: counts?.unreadMessages,  to: "messages",  label: "unread message",   plural: "unread messages" },
+  ].filter(i => i.n > 0);
+
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-8">
-      <EmptyState
-        icon={section.icon}
-        title={copy?.title || section.label}
-        message={copy?.message || "This section is still being built."}
-      />
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-label={total ? `${total} things waiting on you` : "Nothing waiting"}
+        className="relative rounded-full p-2 text-slate-300 hover:bg-white/10 transition"
+      >
+        <Bell size={18} />
+        {total > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-slate-900 text-[10px] font-black flex items-center justify-center px-1 tabular-nums">
+            {total > 9 ? "9+" : total}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-40 w-72 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-4">
+            {counts === null ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                Couldn't check. This needs{" "}
+                <code className="font-mono text-xs">sql/13</code> to have been run.
+              </p>
+            ) : (
+              <>
+                {items.length ? (
+                  <div className="space-y-1">
+                    {items.map(i => (
+                      <button
+                        key={i.to}
+                        onClick={() => { setOpen(false); onGo(i.to); }}
+                        className="w-full text-left rounded-xl px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
+                      >
+                        <span className="font-bold text-sm text-slate-900 dark:text-white tabular-nums">
+                          {i.n}
+                        </span>{" "}
+                        <span className="text-sm text-slate-600 dark:text-slate-300">
+                          {i.n === 1 ? i.label : i.plural}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Nothing waiting on you.
+                  </p>
+                )}
+
+                {counts?.lessonsToday > 0 && (
+                  <p className="mt-2 px-3 text-xs text-slate-500 dark:text-slate-400">
+                    {counts.lessonsToday} lesson{counts.lessonsToday === 1 ? "" : "s"} on today.
+                  </p>
+                )}
+              </>
+            )}
+
+            <p className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              This only updates while the app is open. Your phone won't buzz
+              when a booking comes in — that needs push notifications, which
+              aren't built yet.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }

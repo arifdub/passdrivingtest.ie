@@ -248,3 +248,53 @@ export const FIELD_STEP = {
   base_eircode: 3, counties: 3, service_areas: 3,
   hourly_rate_cents: 4, edt_rate_cents: 4, cancellation_policy: 4,
 };
+
+/* ------------------------------------------------------------------------- */
+/* Listing                                                                    */
+/* ------------------------------------------------------------------------- */
+
+/* The switch that puts a verified instructor into the directory, and takes
+   them out again.
+
+   This needed no new SQL. sql/04 has always let an instructor update their
+   own row, and sql/06's trigger refuses `listed` on anything that is not
+   verified — so the rule was already enforced and the only thing missing was
+   a way to ask for it. A verified instructor had no path into the
+   marketplace at all, which made the directory permanently empty.
+
+   Unlisting is immediate and total: the public select policy covers
+   `verified AND listed`, so the row and everything hanging off it — hours,
+   time off, open slots — goes dark the moment this is turned off. Existing
+   bookings are untouched, because withdrawing from the marketplace is not
+   the same as cancelling on people who already booked. */
+export async function setListed(userId, listed) {
+  if (!HAS_SUPABASE || !userId) return { ok: false, error: "No database connection." };
+
+  const { error } = await supabase
+    .from("instructor_profiles")
+    .update({ listed: !!listed })
+    .eq("user_id", userId);
+
+  if (error) {
+    if (/only a verified instructor/i.test(error.message)) {
+      return { ok: false, error: "Your ADI number has to be verified before you can be listed." };
+    }
+    console.warn("Listing not changed:", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, error: null };
+}
+
+/* What a learner has to be able to see before a listing is any use to them.
+   An instructor listed with no rate and no areas is a dead end in a search
+   result, so the switch says what is missing rather than letting them
+   publish an empty card. */
+export function listingBlockers(profile, { hasHours } = {}) {
+  const missing = [];
+  if (!profile?.full_name) missing.push("your name");
+  if (!profile?.counties?.length) missing.push("the areas you cover");
+  if (!profile?.hourly_rate_cents) missing.push("your hourly rate");
+  if (!profile?.lesson_types?.length) missing.push("what you teach");
+  if (hasHours === false) missing.push("some working hours");
+  return missing;
+}

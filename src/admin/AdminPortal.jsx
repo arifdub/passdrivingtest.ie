@@ -3,7 +3,7 @@
   ADMIN PORTAL  —  /admin
 
   The third door. Approving instructors, settling disputes, setting the
-  platform fee, and seeing what the marketplace is actually doing.
+  disputes, and seeing what the marketplace is actually doing.
 
   WHO GETS IN
 
@@ -68,8 +68,8 @@ const COMING = {
     message: "Every lesson across the platform, its source, and what happened to it.",
   },
   payments: {
-    title: "Payments and payouts",
-    message: "The ledger: lesson amounts, platform fees, refunds and what each instructor is owed.",
+    title: "Payments",
+    message: "Nothing to show, by design: learners pay their instructor directly and no money passes through the platform. If that ever changes, the ledger lives here.",
   },
   marketplace: {
     title: "Marketplace",

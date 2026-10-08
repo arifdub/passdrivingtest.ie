@@ -353,9 +353,13 @@ function StepRates({ profile, set, errors, touched }) {
     <>
       <div className="mb-4 rounded-2xl bg-slate-100 dark:bg-slate-800 p-4">
         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          You set your own prices. Students you bring yourself carry no
-          platform fee — a fee applies only to learners the marketplace sends
-          you, and it's shown before you accept.
+          You set your own prices, and learners pay you directly. No card is
+          taken on this site and the platform takes nothing — from your own
+          students or from the ones the directory sends you.
+        </p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          What you put here is what a learner sees before they book, so there
+          is nothing to agree at the kerb.
         </p>
       </div>
 

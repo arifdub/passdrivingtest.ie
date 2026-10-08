@@ -16,7 +16,9 @@
 */
 
 import React, { useState, useEffect, useCallback } from "react";
-import { CalendarCheck, Clock3, X, Loader2, MapPin, Phone } from "lucide-react";
+import { CalendarCheck, Clock3, X, Loader2, MapPin, Phone, MessageSquare } from "lucide-react";
+import Thread from "./Thread";
+import { unreadByBooking } from "./socialStore";
 import { myBookings, cancelBooking, slotDay, slotTime, isPast } from "./bookingStore";
 import { LESSON_LABELS, euro } from "./marketplace";
 
@@ -25,11 +27,16 @@ export default function MyBookings({ learnerId }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
+  const [unread, setUnread] = useState({});
+  const [talking, setTalking] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const { rows: r, error: e } = await myBookings(learnerId);
-    setRows(r); setError(e); setLoading(false);
+    const [{ rows: r, error: e }, u] = await Promise.all([
+      myBookings(learnerId),
+      unreadByBooking(learnerId),
+    ]);
+    setRows(r); setUnread(u); setError(e); setLoading(false);
   }, [learnerId]);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -87,7 +94,7 @@ export default function MyBookings({ learnerId }) {
               <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                 {waiting
                   ? "The hour is held while they decide. Don't plan around it until it's confirmed."
-                  : "Confirmed. They'll collect you at the time above."}
+                  : "Confirmed. They'll collect you at the time above — pay them directly on the day."}
               </p>
 
               {b.pickup && (
@@ -101,6 +108,21 @@ export default function MyBookings({ learnerId }) {
                 </p>
               )}
 
+              <div className="mt-3 flex items-center gap-4">
+                {/* A thread so a learner can say "I'm outside" without
+                    either of them handing over a mobile number. */}
+                <button
+                  onClick={() => setTalking(b)}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400"
+                >
+                  <MessageSquare size={13} /> Message
+                  {unread[b.id] > 0 && (
+                    <span className="rounded-full bg-emerald-500 text-slate-900 text-[10px] font-black px-1.5 tabular-nums">
+                      {unread[b.id]}
+                    </span>
+                  )}
+                </button>
+
               <button
                 disabled={busy === b.id}
                 onClick={async () => {
@@ -109,17 +131,45 @@ export default function MyBookings({ learnerId }) {
                   setBusy(null);
                   if (ok) refresh(); else setError(e);
                 }}
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-red-500 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-red-500 disabled:opacity-50"
               >
                 {busy === b.id
                   ? <Loader2 size={13} className="animate-spin" />
                   : <X size={13} />}
                 {waiting ? "Withdraw this request" : "Cancel this lesson"}
               </button>
+              </div>
             </div>
           );
         })}
       </div>
+
+      {talking && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/70 backdrop-blur-sm flex items-end"
+          onClick={() => { setTalking(null); refresh(); }}
+        >
+          <div
+            className="w-full max-h-[92vh] overflow-y-auto bg-white dark:bg-slate-800 rounded-t-3xl p-6"
+            style={{ paddingBottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">
+                {talking.instructor?.full_name || "Your instructor"}
+              </h2>
+              <button
+                onClick={() => { setTalking(null); refresh(); }}
+                aria-label="Close"
+                className="shrink-0 text-slate-400 p-1"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <Thread bookingId={talking.id} meId={learnerId} onSent={refresh} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

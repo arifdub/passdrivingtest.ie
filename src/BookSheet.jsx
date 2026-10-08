@@ -77,7 +77,8 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
               The hour is held for you while they decide. It's at the top of
               this screen under <strong>Your lessons</strong>, and it is not
               confirmed until they accept — so don't rearrange your day around
-              it yet.
+              it yet. Nothing has been charged: you pay the instructor
+              directly on the day.
             </p>
             <div className="mt-5">
               <PrimaryButton onClick={onBooked}>Done</PrimaryButton>
@@ -185,7 +186,15 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
 
                 <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                   Your name, email and this address go to the instructor so they
-                  can collect you. Nothing is charged here.
+                  can collect you.
+                </p>
+                {/* Said before they commit, not discovered afterwards. No
+                    card is taken anywhere in this product. */}
+                <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed rounded-xl bg-slate-50 dark:bg-slate-900/50 p-3">
+                  <strong className="text-slate-900 dark:text-white">You pay the instructor directly.</strong>{" "}
+                  No card is taken here and nothing is charged by this site.
+                  Settle up with them in the car, however they normally take
+                  payment{rate ? ` — the lesson is ${euro(rate)}` : ""}.
                 </p>
 
                 <div className="mt-5 space-y-2">
