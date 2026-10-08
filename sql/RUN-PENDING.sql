@@ -1501,6 +1501,68 @@ select i.user_id
 create extension if not exists btree_gist;
 
 -- ---------------------------------------------------------------------------
+-- 0. A table called `bookings` that is not this one
+--
+-- `create table if not exists` is silent when the name is taken. It does not
+-- check that the existing table is the one described below — it just does
+-- nothing and lets the next statement fail, which is what happened here:
+--
+--   ERROR: 42703: column "status" does not exist
+--   CONTEXT: alter table public.bookings add constraint bookings_status_check
+--
+-- Something else in this database already owned the name. The constraint was
+-- the first statement to notice, three hundred lines after the real problem,
+-- and the message said nothing about it.
+--
+-- So the name is checked properly before anything is built on it.
+--
+--   Empty and the wrong shape  -> dropped and rebuilt. Nothing can be lost
+--                                 from a table with no rows in it.
+--   Has rows and the wrong shape -> stop, and say exactly what to look at.
+--                                 Dropping somebody's data to make a
+--                                 migration pass is never the right trade,
+--                                 and quietly bolting our columns onto their
+--                                 table would be worse: two meanings of
+--                                 "booking" sharing one row.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_rows bigint;
+  v_ours int;
+begin
+  if to_regclass('public.bookings') is null then
+    return;                       -- nothing there; the create below does it all
+  end if;
+
+  select count(*) into v_ours
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'bookings'
+     and column_name in ('instructor_id', 'learner_id', 'starts_at', 'status');
+
+  if v_ours = 4 then
+    return;                       -- already ours, from an earlier run
+  end if;
+
+  execute 'select count(*) from public.bookings' into v_rows;
+
+  if v_rows = 0 then
+    raise notice
+      'A different, empty table called public.bookings was in the way. Replacing it.';
+    execute 'drop table public.bookings cascade';
+    return;
+  end if;
+
+  raise exception
+    'public.bookings already exists, holds % row(s), and is not the table this file builds. '
+    'Nothing has been changed. Look at what it is:  '
+    'select column_name, data_type from information_schema.columns '
+    'where table_schema = ''public'' and table_name = ''bookings'' order by ordinal_position;  '
+    'If it is not needed, drop it and run this file again. If it is, rename it first '
+    '(alter table public.bookings rename to bookings_old;) and move the data across by hand.',
+    v_rows;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- 1. The table
 -- ---------------------------------------------------------------------------
 create table if not exists public.bookings (
@@ -1516,6 +1578,14 @@ create table if not exists public.bookings (
 
   starts_at        timestamptz not null,
   duration_minutes int not null default 60,
+  -- Stored, not computed on the fly. The exclusion constraint below has to
+  -- index this range, and an index expression must be IMMUTABLE: adding an
+  -- interval to a timestamptz is only STABLE, because how many hours a day
+  -- contains depends on the session's timezone. So the end is worked out
+  -- once by a trigger and kept, and the constraint indexes two plain
+  -- columns, which is immutable. Postgres refuses the alternative outright:
+  --   ERROR: functions in index expression must be marked IMMUTABLE
+  ends_at          timestamptz,
   kind             text not null default 'lesson',
 
   status text not null default 'requested',
@@ -1550,6 +1620,27 @@ create index if not exists bookings_instructor_idx on public.bookings (instructo
 create index if not exists bookings_learner_idx    on public.bookings (learner_id, starts_at);
 create index if not exists bookings_status_idx     on public.bookings (status, starts_at);
 
+-- ends_at is derived, never sent. Keeping it in one place means it cannot
+-- disagree with the start and duration it comes from.
+create or replace function public.set_booking_end()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.ends_at := new.starts_at + make_interval(mins => new.duration_minutes);
+  return new;
+end $$;
+
+drop trigger if exists bookings_set_end on public.bookings;
+create trigger bookings_set_end
+  before insert or update of starts_at, duration_minutes on public.bookings
+  for each row execute function public.set_booking_end();
+
+-- Backfill, for a table created before this column existed.
+update public.bookings
+   set ends_at = starts_at + make_interval(mins => duration_minutes)
+ where ends_at is null;
+
 drop trigger if exists bookings_touch on public.bookings;
 create trigger bookings_touch
   before update on public.bookings
@@ -1574,7 +1665,7 @@ begin
       add constraint bookings_no_overlap
       exclude using gist (
         instructor_id with =,
-        tstzrange(starts_at, starts_at + (duration_minutes || ' minutes')::interval) with &&
+        tstzrange(starts_at, ends_at) with &&
       )
       where (status in ('requested', 'accepted'));
   end if;

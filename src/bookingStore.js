@@ -200,7 +200,12 @@ export function slotDay(at) {
    An 11:00 that the instructor never answered is dead at noon, and showing
    it as "waiting" after that is a lie about what will happen. */
 export function isPast(booking) {
-  const end = new Date(booking.starts_at).getTime()
-    + (booking.duration_minutes || 60) * 60000;
+  /* ends_at is a real column (sql/12), kept by a trigger. Preferred over
+     recomputing, so this cannot disagree with what the exclusion constraint
+     actually indexed. The fallback is for a row read before that column
+     existed. */
+  const end = booking.ends_at
+    ? new Date(booking.ends_at).getTime()
+    : new Date(booking.starts_at).getTime() + (booking.duration_minutes || 60) * 60000;
   return end < Date.now();
 }

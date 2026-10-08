@@ -124,3 +124,23 @@ describe("the words shown for a status", () => {
     }
   });
 });
+
+describe("ends_at, now that the database stores it", () => {
+  it("is trusted over the start plus a duration", () => {
+    /* The two should agree, and the stored one is what the exclusion
+       constraint indexed — so if they ever disagree, the column is right
+       and the arithmetic is wrong. */
+    const now = Date.now();
+    const b = {
+      starts_at: new Date(now - 3 * 3600000).toISOString(),
+      duration_minutes: 60,
+      ends_at: new Date(now + 3600000).toISOString(),
+    };
+    expect(isPast(b)).toBe(false);
+  });
+
+  it("still works for a row that predates the column", () => {
+    const b = { starts_at: new Date(Date.now() - 120 * 60000).toISOString(), duration_minutes: 60 };
+    expect(isPast(b)).toBe(true);
+  });
+});
