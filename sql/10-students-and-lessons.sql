@@ -33,6 +33,25 @@
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
+-- 0. The files this one stands on
+--
+-- Running these out of order used to fail with a bare `42883: function
+-- public.is_platform_admin() does not exist` three hundred lines in, which
+-- says nothing about what to do. Say it plainly instead.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if to_regprocedure('public.is_platform_admin()') is null then
+    raise exception
+      'Run sql/06-admin-verification.sql before this file (it creates is_platform_admin).';
+  end if;
+  if to_regclass('public.instructor_profiles') is null then
+    raise exception
+      'Run sql/04-instructor-profiles.sql before this file.';
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- 1. Students
 -- ---------------------------------------------------------------------------
 create table if not exists public.instructor_students (
@@ -206,7 +225,8 @@ create policy lesson_admin_all on public.lessons
 -- instructor and a learner both care about. Counted from completed lessons
 -- of kind 'edt', which is why there is no column holding it.
 -- ---------------------------------------------------------------------------
-create or replace view public.student_progress
+drop view if exists public.student_progress cascade;
+create view public.student_progress
 with (security_invoker = true)
 as
   select
@@ -228,7 +248,14 @@ grant select on public.student_progress to authenticated;
 --
 -- Replaces sql/09's version, adding the two that were still dashes.
 -- ---------------------------------------------------------------------------
-create or replace function public.instructor_stats()
+-- sql/09 created this with two columns. A function's OUT parameters are its
+-- return type, and Postgres will not let `create or replace` change one —
+-- it stops with `42P13: cannot change return type of existing function`.
+-- So the old one goes first. Dropping and recreating inside the same script
+-- is atomic: no window where the dashboard finds nothing.
+drop function if exists public.instructor_stats();
+
+create function public.instructor_stats()
 returns table (
   new_enquiries   bigint,
   open_enquiries  bigint,

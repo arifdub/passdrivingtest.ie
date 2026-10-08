@@ -1188,7 +1188,8 @@ create policy lesson_admin_all on public.lessons
 -- instructor and a learner both care about. Counted from completed lessons
 -- of kind 'edt', which is why there is no column holding it.
 -- ---------------------------------------------------------------------------
-create or replace view public.student_progress
+drop view if exists public.student_progress cascade;
+create view public.student_progress
 with (security_invoker = true)
 as
   select
@@ -1210,7 +1211,13 @@ grant select on public.student_progress to authenticated;
 --
 -- Replaces sql/09's version, adding the two that were still dashes.
 -- ---------------------------------------------------------------------------
-create or replace function public.instructor_stats()
+-- sql/09 above created this with two columns. A function's OUT parameters
+-- are its return type, and Postgres will not let `create or replace` change
+-- one — it stops with `42P13: cannot change return type of existing
+-- function`. So the old one goes first.
+drop function if exists public.instructor_stats();
+
+create function public.instructor_stats()
 returns table (
   new_enquiries   bigint,
   open_enquiries  bigint,
