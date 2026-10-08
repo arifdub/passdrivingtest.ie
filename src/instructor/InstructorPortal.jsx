@@ -372,19 +372,29 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
         </button>
       )}
 
+      {/* This card has been a running list of what does not work yet. Every
+          section now does, so the only honest thing left on it is the one
+          real gap — you have to open the app to find out anything happened.
+          A card claiming things are "still being built" when they are built
+          is worse than no card: it teaches people not to read it. */}
       <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
         <div className="flex items-center gap-2.5">
           <Hammer size={18} className="text-amber-500 shrink-0" />
           <h2 className="font-bold text-slate-900 dark:text-white">
-            Still being built
+            Nothing reaches you outside the app yet
           </h2>
         </div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Your calendar, students, availability and bookings all work now. A
-          learner can pick one of your open hours and you accept or decline it
-          here. Payments, reviews and messages are what is left. Nothing above
-          is invented — a tile stays blank rather than show a number with
-          nothing behind it.
+          Every part of this portal works — your calendar, students,
+          availability, bookings, marketplace listing, earnings, reviews and
+          messages. What is missing is being <em>told</em>: no email when a
+          learner books, and no notification on your phone. Until that exists,
+          the only way to find a new request is to open this and look, so it
+          is worth a glance each morning.
+        </p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          Nothing above is invented either — a tile stays blank rather than
+          show a number with nothing behind it.
         </p>
       </div>
 
