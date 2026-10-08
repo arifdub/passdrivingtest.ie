@@ -24,6 +24,8 @@ import {
   ShieldCheck, Clock3, ShieldAlert, Loader2,
 } from "lucide-react";
 import { useAuth } from "../appAuth";
+import AvatarPicker from "../AvatarPicker";
+import { setInstructorPhoto } from "../avatars";
 import { PrimaryButton, SecondaryButton, VerifiedBadge } from "../ui";
 import { TRANSMISSIONS, LESSON_TYPES } from "./instructorStore";
 
@@ -35,7 +37,7 @@ function euro(cents) {
   return `€${(cents / 100).toFixed(2)}`;
 }
 
-export default function Account({ loading, status, profile, draft, onRegister }) {
+export default function Account({ loading, status, profile, draft, onRegister, onChanged }) {
   const { user } = useAuth();
   const p = profile || draft;
 
@@ -54,21 +56,33 @@ export default function Account({ loading, status, profile, draft, onRegister })
       {/* Who this is                                                        */}
       {/* ------------------------------------------------------------------ */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-        <div className="flex items-start gap-4">
-          <div className="shrink-0 w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-            <UserCircle size={28} className="text-slate-400" />
+        <div className="min-w-0">
+          <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white truncate">
+            {p?.full_name || "Your profile"}
+          </h2>
+          {p?.business_name && (
+            <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{p.business_name}</p>
+          )}
+          <div className="mt-2">
+            <StatusBadge status={status} />
           </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white truncate">
-              {p?.full_name || "Your profile"}
-            </h2>
-            {p?.business_name && (
-              <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{p.business_name}</p>
-            )}
-            <div className="mt-2">
-              <StatusBadge status={status} />
-            </div>
-          </div>
+        </div>
+
+        {/* Tap the circle. An instructor's photo is the first thing a learner
+            looks at on a directory card, so it is said plainly that this one
+            is public rather than left to be discovered. */}
+        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+          <AvatarPicker
+            url={profile?.photo_url}
+            userId={user?.id}
+            name={p?.full_name || user?.email}
+            note="Shown on your card in the directory, so learners can see who they are booking."
+            onSave={async (url) => {
+              const r = await setInstructorPhoto(user?.id, url);
+              if (r.ok) await onChanged?.();
+              return r;
+            }}
+          />
         </div>
 
         {p?.bio && (

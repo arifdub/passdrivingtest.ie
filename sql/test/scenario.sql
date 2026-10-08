@@ -364,3 +364,47 @@ begin
     (select has_hours = false and listed = true from public.booking_availability(nw)),
     'booking_availability says it is missing hours, not unlisted');
 end $$;
+
+-- --------------------------------------------------------------------------
+-- Profile photos: the path IS the permission
+--
+-- sql/15's write policies check that the first folder of the object name is
+-- the caller's own account id. If that expression is wrong, anybody can
+-- overwrite anybody's photo — and nothing in the app would reveal it,
+-- because the app always writes the correct path.
+-- --------------------------------------------------------------------------
+do $$
+declare
+  amy constant text := '22222222-2222-2222-2222-222222222222';
+  ben constant text := '33333333-3333-3333-3333-333333333333';
+begin
+  perform pg_temp.report(
+    (select public from storage.buckets where id = 'avatars'),
+    'the avatars bucket is readable by anyone');
+
+  perform pg_temp.report(
+    storage.foldername(amy || '/1760000000.jpg') = array[amy],
+    'the first folder of a photo path is the account id');
+
+  -- The policies are written against auth.uid(); check the expression they
+  -- rest on agrees for one person and disagrees for another.
+  perform pg_temp.be(amy);
+  perform pg_temp.report(
+    (storage.foldername(amy || '/x.jpg'))[1] = auth.uid()::text,
+    'a person matches their own folder');
+  perform pg_temp.report(
+    (storage.foldername(ben || '/x.jpg'))[1] is distinct from auth.uid()::text,
+    'and does not match somebody else''s');
+
+  perform pg_temp.report(
+    (select count(*) from pg_policies
+      where schemaname = 'storage' and tablename = 'objects'
+        and policyname like '%avatar%') = 4,
+    'all four avatar policies exist');
+
+  perform pg_temp.report(
+    exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'profiles'
+               and column_name = 'avatar_url'),
+    'a learner has somewhere to keep a photo');
+end $$;

@@ -41,6 +41,7 @@ import {
 import BookSheet from "./BookSheet";
 import MyBookings from "./MyBookings";
 import ReviewSheet from "./ReviewSheet";
+import { initialsFor } from "./avatars";
 import { ratingsFor, ratingLabel, listReviews, canReview } from "./socialStore";
 import { myBookings } from "./bookingStore";
 
@@ -241,13 +242,26 @@ function InstructorCard({ row, enquiry, isGuest, onAsk, onBook, rating, myReview
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-black text-slate-900 dark:text-white truncate">
-            {row.full_name || "Instructor"}
-          </h3>
-          {row.business_name && (
-            <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{row.business_name}</p>
-          )}
+        {/* The photo, where it is actually worth something: a learner
+            deciding who to get into a car with. Initials when there is none
+            — never an empty grey circle, and never a broken image. */}
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+            {row.photo_url
+              ? <img src={row.photo_url} alt="" className="w-full h-full object-cover"
+                     onError={e => { e.currentTarget.style.display = "none"; }} />
+              : <span className="text-sm font-black text-slate-400">
+                  {initialsFor(row.full_name || "")}
+                </span>}
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-black text-slate-900 dark:text-white truncate">
+              {row.full_name || "Instructor"}
+            </h3>
+            {row.business_name && (
+              <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{row.business_name}</p>
+            )}
+          </div>
         </div>
         <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest">
           <BadgeCheck size={12} /> Verified

@@ -44,3 +44,43 @@ create table if not exists public.progress (
   attempts int default 0,
   answered jsonb
 );
+
+-- ---------------------------------------------------------------------------
+-- Enough of Supabase Storage to run sql/15 against.
+--
+-- Shapes only — no actual file handling. What is being checked is that the
+-- bucket row and the four policies are valid SQL against tables of the right
+-- shape, and in particular that storage.foldername() is used correctly,
+-- since that expression IS the permission.
+-- ---------------------------------------------------------------------------
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false,
+  file_size_limit bigint,
+  allowed_mime_types text[],
+  created_at timestamptz default now()
+);
+
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets (id),
+  name text,
+  owner uuid,
+  created_at timestamptz default now(),
+  metadata jsonb
+);
+
+alter table storage.objects enable row level security;
+
+/* Supabase's own: the path's folders, without the file name.
+   'abc/123.jpg' -> {abc} */
+create or replace function storage.foldername(name text)
+returns text[]
+language sql
+immutable
+as $$
+  select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1];
+$$;

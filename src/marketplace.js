@@ -33,7 +33,7 @@ export async function listInstructors({ county, lessonType, transmission } = {})
     .from("instructor_profiles")
     .select("user_id, full_name, business_name, bio, adi_number, adi_category, " +
             "years_experience, transmissions, lesson_types, counties, service_areas, " +
-            "hourly_rate_cents, edt_rate_cents, verified_at")
+            "hourly_rate_cents, edt_rate_cents, verified_at, photo_url")
     .eq("verification_status", "verified")
     .eq("listed", true)
     .order("verified_at", { ascending: true })

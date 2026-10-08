@@ -523,6 +523,10 @@ export function AccountMenu({
      and on the instructor dashboard it pushed the page title into an
      ellipsis — "Instructor Das…". The menu behind it is identical. */
   variant = "pill",
+  /* The person's own photo, when they have one. Falls back to initials —
+     which is also what happens if the image 404s, because a broken-image
+     icon in a header looks like the app is broken. */
+  photoUrl = null,
 }) {
   const initials = (email || "?")
     .split("@")[0]
@@ -554,8 +558,11 @@ export function AccountMenu({
       >
         {variant === "avatar" ? (
           <>
-            <span className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-slate-900 text-xs font-black flex items-center justify-center">
-              {initials}
+            <span className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-600 text-slate-900 text-xs font-black flex items-center justify-center">
+              {photoUrl
+                ? <img src={photoUrl} alt="" className="w-full h-full object-cover"
+                       onError={e => { e.currentTarget.style.display = "none"; }} />
+                : initials}
             </span>
             <ChevronRight
               size={14}

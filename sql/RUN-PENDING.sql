@@ -9,7 +9,7 @@
 -- so running this when some of it has already been applied is safe. If you
 -- are unsure whether 04 went in, run the lot.
 --
--- This is sql/04 through sql/14 in order. Those files remain the originals;
+-- This is sql/04 through sql/15 in order. Those files remain the originals;
 -- this one is for pasting.
 --
 -- AFTERWARDS — make yourself an admin. There is no client path to it:
@@ -2688,3 +2688,107 @@ $$;
 
 revoke all on function public.booking_availability(uuid) from public;
 grant execute on function public.booking_availability(uuid) to anon, authenticated;
+
+-- ###########################################################################
+-- ### 15 — PROFILE PHOTOS
+-- ###########################################################################
+--
+-- An avatars bucket, and the rule that a person may only write inside a
+-- folder named after their own account id. Reads are public: an instructor's
+-- photo is on a public directory card, and a photo behind an expiring signed
+-- URL is a broken image on a marketplace listing.
+
+-- ---------------------------------------------------------------------------
+-- 1. Somewhere for a learner's photo to live
+-- ---------------------------------------------------------------------------
+alter table public.profiles
+  add column if not exists avatar_url text;
+
+-- ---------------------------------------------------------------------------
+-- 2. The bucket
+--
+-- Created through storage's own table so this file is idempotent. The
+-- dashboard's "New bucket" button does the same thing.
+--
+-- 5 MB is generous for an avatar the app downscales to 512px before it
+-- uploads; the limit is there to stop a 48-megapixel phone photo being
+-- pushed straight up on a bad connection, not to be reached.
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'avatars', 'avatars', true, 5242880,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+  set public = true,
+      file_size_limit = 5242880,
+      allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp'];
+
+-- ---------------------------------------------------------------------------
+-- 3. Who may do what
+--
+-- Read: anyone. Write, replace, delete: only inside your own folder.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  -- storage.objects belongs to the storage extension, so these are created
+  -- defensively: on a project where the role running this file cannot add a
+  -- policy there, the rest of the migration should still apply and the
+  -- reason should be legible rather than a bare permission error.
+  begin
+    drop policy if exists "avatars are publicly readable" on storage.objects;
+    create policy "avatars are publicly readable" on storage.objects
+      for select using (bucket_id = 'avatars');
+
+    drop policy if exists "a person writes only their own avatar" on storage.objects;
+    create policy "a person writes only their own avatar" on storage.objects
+      for insert to authenticated
+      with check (
+        bucket_id = 'avatars'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      );
+
+    drop policy if exists "a person replaces only their own avatar" on storage.objects;
+    create policy "a person replaces only their own avatar" on storage.objects
+      for update to authenticated
+      using (
+        bucket_id = 'avatars'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      )
+      with check (
+        bucket_id = 'avatars'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      );
+
+    drop policy if exists "a person deletes only their own avatar" on storage.objects;
+    create policy "a person deletes only their own avatar" on storage.objects
+      for delete to authenticated
+      using (
+        bucket_id = 'avatars'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      );
+  exception when insufficient_privilege then
+    raise notice
+      'Could not create the storage policies (%). Add them in the Supabase dashboard under Storage > avatars > Policies: public SELECT, and INSERT/UPDATE/DELETE for authenticated where (storage.foldername(name))[1] = auth.uid()::text.',
+      sqlerrm;
+  end;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 4. A learner may set their own avatar_url and nothing else that matters
+--
+-- profiles already has a per-row policy from sql/01 and a trigger from
+-- sql/07 that governs roles. avatar_url is an ordinary column: the existing
+-- update policy covers it, and enforce_profile_roles still refuses anything
+-- privileged in the same write. Nothing new is needed here, and this comment
+-- exists so the next person does not go looking for it.
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- 5. The photo a learner sees on a marketplace card
+--
+-- instructor_profiles already has photo_url and is already publicly
+-- selectable for verified, listed instructors (sql/04), so the directory
+-- needs no change. Stated here only because "where is the policy for the
+-- photo" is the obvious question.
+-- ---------------------------------------------------------------------------

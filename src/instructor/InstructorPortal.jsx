@@ -225,6 +225,7 @@ export default function InstructorPortal({ onExitRole }) {
               <NotificationBell counts={waiting} onGo={(to) => setSection(to)} />
               <AccountMenu
                 variant="avatar"
+                photoUrl={profile?.photo_url}
                 email={user?.email}
                 portals={portalsFor({ accountRoles, isAdminAccount, here: "instructor" })}
                 onSwitch={onExitRole}
@@ -279,6 +280,7 @@ export default function InstructorPortal({ onExitRole }) {
                 profile={profile}
                 draft={draft}
                 onRegister={() => setRegistering(true)}
+                onChanged={refresh}
               />
             )
           : null}

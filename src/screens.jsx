@@ -36,6 +36,8 @@ import {
   SecondaryButton, PrimaryButton, Toggle, DangerButton, SettingsGroup,
 } from "./ui";
 import { useTextSize } from "./textSize";
+import AvatarPicker from "./AvatarPicker";
+import { setLearnerPhoto } from "./avatars";
 
 const SECTION_ICON = {
   "dtt.sec.rules": ClipboardCheck,
@@ -1101,7 +1103,7 @@ function InstallStep({ n, children }) {
    PROFILE
    =========================================================================== */
 export function ProfileScreen({ theme, toggleTheme }) {
-  const { profile, displayName, subscription, signOut, mode, isGuest, exitGuest } = useAuth();
+  const { profile, displayName, subscription, signOut, mode, isGuest, exitGuest, user, refreshProfile } = useAuth();
   const { accountRoles, isAdminAccount } = usePlatform();
   const otherPortals = portalsFor({ accountRoles, isAdminAccount, here: "student" });
   const { resetAll, overall } = useProgress();
@@ -1128,18 +1130,41 @@ export function ProfileScreen({ theme, toggleTheme }) {
     <>
       <ScreenHeader title="Settings" />
       <Screen>
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
-            <User size={24} className="text-slate-500 dark:text-slate-300" />
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+              {!isGuest && profile?.avatar_url
+                ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover"
+                       onError={e => { e.currentTarget.style.display = "none"; }} />
+                : <User size={24} className="text-slate-500 dark:text-slate-300" />}
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-slate-900 dark:text-white truncate">
+                {isGuest ? "Studying as a guest" : displayName}
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                {isGuest ? "No account yet" : profile?.email}
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="font-bold text-slate-900 dark:text-white truncate">
-              {isGuest ? "Studying as a guest" : displayName}
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
-              {isGuest ? "No account yet" : profile?.email}
-            </p>
-          </div>
+
+          {/* A guest has nowhere to put a photo — there is no account yet —
+              and the card below already asks them to make one. */}
+          {!isGuest && (
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+              <AvatarPicker
+                url={profile?.avatar_url}
+                userId={user?.id}
+                name={displayName || profile?.email}
+                note="Shown to an instructor you book a lesson with, so they know who they are collecting."
+                onSave={async (url) => {
+                  const r = await setLearnerPhoto(user?.id, url);
+                  if (r.ok) await refreshProfile?.();
+                  return r;
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {isGuest ? (
