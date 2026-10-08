@@ -527,6 +527,11 @@ export function AccountMenu({
      which is also what happens if the image 404s, because a broken-image
      icon in a header looks like the app is broken. */
   photoUrl = null,
+  /* Things this menu can do inside the app — [{ label, icon, onClick }].
+     Rendered above the portal links, because "edit my profile" is a far
+     more common intent than "open my other portal", and the destructive
+     one stays last. */
+  actions = [],
 }) {
   const initials = (email || "?")
     .split("@")[0]
@@ -591,6 +596,20 @@ export function AccountMenu({
             Signed in as<br />
             <span className="font-bold text-slate-900 dark:text-white">{email}</span>
           </p>
+        )}
+
+        {actions.length > 0 && (
+          <div className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1">
+            {actions.map(({ label, icon: Icon, onClick }) => (
+              <button
+                key={label}
+                onClick={onClick}
+                className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-left whitespace-nowrap text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+              >
+                <Icon size={15} className="text-slate-400 shrink-0" /> {label}
+              </button>
+            ))}
+          </div>
         )}
 
         {portals.length > 0 && (

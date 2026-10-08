@@ -68,25 +68,31 @@ const TABS = [
   { id: "dashboard", label: "Home",     icon: Home },
   { id: "students",  label: "Students", icon: Users },
   { id: "calendar",  label: "Calendar", icon: Calendar },
-  { id: "account",   label: "Account",  icon: UserCircle },
+  /* The two that carry a count. Somebody is waiting at the other end of
+     both, which is what earns a place in the bar — and a number there is
+     seen without opening anything. */
+  { id: "bookings",  label: "Bookings", icon: CalendarCheck, badge: "bookingRequests" },
+  { id: "messages",  label: "Messages", icon: MessageSquare, badge: "unreadMessages" },
 ];
 
 /* The big coloured cards at the top of home. Four, because a 2x2 grid is
    what a thumb can reach without the phone moving in the hand. */
+/* Bookings moved to the bar, so its tile goes to Availability — which is
+   what decides whether a booking can happen at all. An instructor with no
+   hours set is invisible, and nothing else on this screen says so. */
 const QUICK = [
-  { id: "students",  label: "Students",  icon: Users,          tone: "blue" },
-  { id: "calendar",  label: "Calendar",  icon: Calendar,       tone: "green" },
-  { id: "enquiries", label: "Enquiries", icon: MessageSquare,  tone: "orange" },
-  { id: "bookings",  label: "Bookings",  icon: CalendarCheck,  tone: "purple" },
+  { id: "students",     label: "Students",  icon: Users,         tone: "blue" },
+  { id: "calendar",     label: "Calendar",  icon: Calendar,      tone: "green" },
+  { id: "enquiries",    label: "Enquiries", icon: MessageSquare, tone: "orange" },
+  { id: "availability", label: "Hours",     icon: Clock,         tone: "purple" },
 ];
 
 /* Reached from home, under More. Not lesser — just not daily. */
 const MORE = [
-  { id: "availability", label: "Availability", icon: Clock },
-  { id: "marketplace",  label: "Marketplace",  icon: Store },
-  { id: "earnings",     label: "Earnings",     icon: Wallet },
-  { id: "reviews",      label: "Reviews",      icon: Star },
-  { id: "messages",     label: "Messages",     icon: MessageSquare },
+  { id: "marketplace", label: "Marketplace",  icon: Store },
+  { id: "earnings",    label: "Earnings",     icon: Wallet },
+  { id: "reviews",     label: "Reviews",      icon: Star },
+  { id: "account",     label: "Profile & account", icon: UserCircle },
 ];
 
 const TITLES = {
@@ -227,6 +233,12 @@ export default function InstructorPortal({ onExitRole }) {
                 variant="avatar"
                 photoUrl={profile?.photo_url}
                 email={user?.email}
+                /* The whole account section lives behind the photo now,
+                   which is where people look for their own details and
+                   where the bar no longer has room. */
+                actions={[
+                  { label: "Edit profile", icon: Pencil, onClick: () => setSection("account") },
+                ]}
                 portals={portalsFor({ accountRoles, isAdminAccount, here: "instructor" })}
                 onSwitch={onExitRole}
                 switchLabel="Back to the site"
@@ -314,28 +326,39 @@ function TabBar({ section, onGo, waiting }) {
       className="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="max-w-5xl mx-auto grid grid-cols-4">
-        {TABS.map(({ id, label, icon: Icon }) => {
+      <div className="max-w-5xl mx-auto grid grid-cols-5">
+        {TABS.map(({ id, label, icon: Icon, badge }) => {
           const on = id === active;
+          /* A real number, not a dot: "3 bookings waiting" is a different
+             decision from "something is waiting", and this is the only
+             place it can be seen without opening anything. Absent at zero,
+             because a badge reading 0 is a badge nobody believes. */
+          const count = badge ? (waiting?.[badge] || 0) : 0;
           return (
             <button
               key={id}
               onClick={() => onGo(id)}
               aria-current={on ? "page" : undefined}
+              aria-label={count ? `${label}, ${count} waiting` : label}
               className="relative flex flex-col items-center gap-1 py-2.5 transition"
             >
-              <span className={`relative flex items-center justify-center w-14 h-8 rounded-full transition ${
+              <span className={`relative flex items-center justify-center w-12 h-8 rounded-full transition ${
                 on ? "bg-emerald-500/15" : ""
               }`}>
                 <Icon
-                  size={21}
+                  size={20}
                   className={on ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}
                 />
+                {count > 0 && (
+                  <span className="absolute -top-1 right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center tabular-nums">
+                    {count > 9 ? "9+" : count}
+                  </span>
+                )}
                 {id === "dashboard" && pending > 0 && !on && (
-                  <span className="absolute top-1 right-3 w-2 h-2 rounded-full bg-red-500" />
+                  <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-red-500" />
                 )}
               </span>
-              <span className={`text-[11px] font-bold ${
+              <span className={`text-[10px] font-bold ${
                 on ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
               }`}>
                 {label}

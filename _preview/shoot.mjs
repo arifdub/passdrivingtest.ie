@@ -68,7 +68,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "OPTIONS") { res.statusCode = 204; return res.end(); }
     if (fn === "open_slots") return res.end(JSON.stringify(slots()));
     if (fn === "my_waiting") return res.end(JSON.stringify([
-      { booking_requests: 1, new_enquiries: 2, unread_messages: 0, lessons_today: 3 },
+      { booking_requests: 1, new_enquiries: 2, unread_messages: 2, lessons_today: 3 },
     ]));
     return res.end(JSON.stringify(null));
   }
