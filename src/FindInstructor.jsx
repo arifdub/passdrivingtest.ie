@@ -30,7 +30,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Search, MapPin, Car, BadgeCheck, Loader2, AlertCircle, Check, X,
-  MessageSquare, SlidersHorizontal,
+  MessageSquare, SlidersHorizontal, CalendarCheck,
 } from "lucide-react";
 import { useAuth } from "./appAuth";
 import { ScreenHeader, EmptyState, PrimaryButton, SecondaryButton } from "./ui";
@@ -38,6 +38,8 @@ import {
   listInstructors, countiesWithInstructors, sendEnquiry, myEnquiries,
   euro, LESSON_LABELS,
 } from "./marketplace";
+import BookSheet from "./BookSheet";
+import MyBookings from "./MyBookings";
 
 export default function FindInstructor({ onBack }) {
   const { user, isGuest, displayName } = useAuth();
@@ -49,6 +51,7 @@ export default function FindInstructor({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [asking, setAsking] = useState(null);
+  const [booking, setBooking] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -116,6 +119,8 @@ export default function FindInstructor({ onBack }) {
           </div>
         )}
 
+        {!isGuest && <div className="mt-5"><MyBookings learnerId={user?.id} /></div>}
+
         <div className="mt-4 space-y-3">
           {rows.map(row => (
             <InstructorCard
@@ -124,10 +129,19 @@ export default function FindInstructor({ onBack }) {
               enquiry={sent[row.user_id]}
               isGuest={isGuest}
               onAsk={() => setAsking(row)}
+              onBook={() => setBooking(row)}
             />
           ))}
         </div>
       </div>
+
+      {booking && (
+        <BookSheet
+          instructor={booking}
+          onClose={() => setBooking(null)}
+          onBooked={async () => { setBooking(null); await refresh(); }}
+        />
+      )}
 
       {asking && (
         <EnquirySheet
@@ -159,7 +173,7 @@ function Chip({ on, onClick, children }) {
   );
 }
 
-function InstructorCard({ row, enquiry, isGuest, onAsk }) {
+function InstructorCard({ row, enquiry, isGuest, onAsk, onBook }) {
   const rate = euro(row.hourly_rate_cents);
   const edt = euro(row.edt_rate_cents);
 
@@ -197,24 +211,37 @@ function InstructorCard({ row, enquiry, isGuest, onAsk }) {
         <p className="mt-2.5 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{row.bio}</p>
       )}
 
-      <div className="mt-4">
-        {enquiry ? (
-          <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-            <Check size={15} />
-            {enquiry.status === "declined" ? "They couldn't take this on"
-              : enquiry.status === "answered" ? "They've been in touch"
-              : "Asked — they'll get back to you"}
-          </p>
-        ) : isGuest ? (
+      {/* Booking is the primary action now that there are hours behind it.
+          Asking stays, because an instructor with no availability set — or a
+          learner who wants to talk first — still needs a way in. */}
+      <div className="mt-4 space-y-2">
+        {isGuest ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Create a free account to get in touch with an instructor.
+            Create a free account to book a lesson or get in touch.
           </p>
         ) : (
-          <PrimaryButton onClick={onAsk}>
-            <span className="inline-flex items-center gap-2">
-              <MessageSquare size={15} /> Ask about lessons
-            </span>
-          </PrimaryButton>
+          <>
+            <PrimaryButton onClick={onBook}>
+              <span className="inline-flex items-center gap-2">
+                <CalendarCheck size={15} /> Book a lesson
+              </span>
+            </PrimaryButton>
+
+            {enquiry ? (
+              <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                <Check size={15} />
+                {enquiry.status === "declined" ? "They couldn't take this on"
+                  : enquiry.status === "answered" ? "They've been in touch"
+                  : "Asked — they'll get back to you"}
+              </p>
+            ) : (
+              <SecondaryButton onClick={onAsk}>
+                <span className="inline-flex items-center gap-2">
+                  <MessageSquare size={15} /> Ask about lessons
+                </span>
+              </SecondaryButton>
+            )}
+          </>
         )}
       </div>
     </div>

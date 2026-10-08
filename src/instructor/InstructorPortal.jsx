@@ -39,8 +39,10 @@ import Students from "./Students";
    a build error rather than a warning. Same reason as RouteIcon in App.jsx. */
 import CalendarScreen from "./Calendar";
 import Availability from "./Availability";
+import Bookings from "./Bookings";
 import Account from "./Account";
 import { receivedEnquiries } from "../marketplace";
+import { receivedBookings, isPast } from "../bookingStore";
 import { listLessons, listStudents } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
@@ -58,8 +60,8 @@ const SECTIONS = [
   { id: "calendar",     label: "Calendar",     icon: Calendar },
   { id: "students",     label: "Students",     icon: Users },
   { id: "enquiries",    label: "Enquiries",    icon: MessageSquare },
-  { id: "availability", label: "Availability", icon: Clock },
   { id: "bookings",     label: "Bookings",     icon: CalendarCheck },
+  { id: "availability", label: "Availability", icon: Clock },
   { id: "marketplace",  label: "Marketplace",  icon: Store },
   { id: "earnings",     label: "Earnings",     icon: Wallet },
   { id: "reviews",      label: "Reviews",      icon: Star },
@@ -69,10 +71,6 @@ const SECTIONS = [
 /* What each section will be, said once, in the section itself. These are
    promises the schema already has a shape for — not marketing copy. */
 const COMING = {
-  bookings: {
-    title: "Bookings",
-    message: "Requests from learners to accept or decline. Your hours and terms are set under Availability; what is missing is the server-side piece that holds a slot so two learners cannot claim the same hour.",
-  },
   marketplace: {
     title: "Marketplace",
     message: "New-student enquiries, and the empty-slot tool that offers an unbooked hour to learners waiting nearby.",
@@ -192,6 +190,7 @@ export default function InstructorPortal({ onExitRole }) {
               draft={draft}
               onRegister={() => setRegistering(true)}
               onOpenAccount={() => setSection("account")}
+              onOpenBookings={() => setSection("bookings")}
               onOpenEnquiries={() => setSection("enquiries")}
             />
           )
@@ -203,6 +202,9 @@ export default function InstructorPortal({ onExitRole }) {
             )
           : section === "enquiries" ? <Enquiries onAddedStudent={() => setSection("students")} />
           : section === "availability" ? <Availability />
+          : section === "bookings" ? (
+              <Bookings onAccepted={() => setSection("calendar")} />
+            )
           : section === "account" ? (
               <Account
                 loading={loading}
@@ -227,7 +229,7 @@ export default function InstructorPortal({ onExitRole }) {
    --------------------------------------------------------------------------- */
 function num(v) { return typeof v === "number" ? String(v) : "—"; }
 
-function InstructorDashboard({ loading, status, profile, draft, onRegister, onOpenAccount, onOpenEnquiries }) {
+function InstructorDashboard({ loading, status, profile, draft, onRegister, onOpenAccount, onOpenBookings, onOpenEnquiries }) {
   const { user } = useAuth();
   const [newEnquiries, setNewEnquiries] = useState(undefined);
   const [counts, setCounts] = useState({});
@@ -245,10 +247,11 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
     const weekEnd = new Date(dayStart); weekEnd.setDate(weekEnd.getDate() + 7);
 
     (async () => {
-      const [today, week, students] = await Promise.all([
+      const [today, week, students, requests] = await Promise.all([
         listLessons(user.id, { from: dayStart, to: dayEnd }),
         listLessons(user.id, { from: new Date(), to: weekEnd }),
         listStudents(user.id),
+        receivedBookings(user.id, { status: "requested" }),
       ]);
       if (off) return;
       setCounts({
@@ -257,6 +260,11 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
         week: week.error ? undefined
           : week.rows.filter(l => l.status === "scheduled").length,
         students: students.error ? undefined : students.rows.length,
+        /* A request whose hour has already gone by is not waiting on anyone.
+           Counting it would send the instructor to a screen with nothing
+           actionable on it. */
+        requests: requests.error ? undefined
+          : requests.rows.filter(b => !isPast(b)).length,
       });
     })();
 
@@ -323,6 +331,32 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
         />
       </div>
 
+      {/* Not a sixth tile. A booking request is the one thing on this screen
+          that someone is waiting on an answer to, so it gets a line of its
+          own and a way straight to it — and it is absent entirely when there
+          is nothing to answer, rather than sitting there reading zero. */}
+      {counts.requests > 0 && (
+        <button
+          onClick={onOpenBookings}
+          className="mt-3 w-full text-left rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 p-4 flex items-center gap-3"
+        >
+          <CalendarCheck size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-sm text-slate-900 dark:text-white">
+              {counts.requests === 1
+                ? "One learner is waiting on you"
+                : `${counts.requests} learners are waiting on you`}
+            </p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              The hour stays held until you accept or decline.
+            </p>
+          </div>
+          <span className="shrink-0 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+            Open
+          </span>
+        </button>
+      )}
+
       <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
         <div className="flex items-center gap-2.5">
           <Hammer size={18} className="text-amber-500 shrink-0" />
@@ -331,11 +365,11 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
           </h2>
         </div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Your calendar, students and availability are working now. Taking a
-          booking from a learner is next, and it needs a server: holding a slot
-          so two people cannot claim the same hour is not something a browser
-          can promise. Until then nothing above is invented — every tile stays
-          blank rather than show a number with nothing behind it.
+          Your calendar, students, availability and bookings all work now. A
+          learner can pick one of your open hours and you accept or decline it
+          here. Payments, reviews and messages are what is left. Nothing above
+          is invented — a tile stays blank rather than show a number with
+          nothing behind it.
         </p>
       </div>
 
