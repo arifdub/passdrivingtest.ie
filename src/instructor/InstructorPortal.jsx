@@ -32,7 +32,12 @@ import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
 import { portalsFor } from "../portals";
 import Enquiries from "./Enquiries";
+import Students from "./Students";
+/* Aliased: lucide-react exports a Calendar icon too, and the collision is
+   a build error rather than a warning. Same reason as RouteIcon in App.jsx. */
+import CalendarScreen from "./Calendar";
 import { receivedEnquiries } from "../marketplace";
+import { listLessons, listStudents } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
 
@@ -98,6 +103,10 @@ export default function InstructorPortal({ onExitRole }) {
   const { accountRoles, isAdminAccount } = usePlatform();
   const [section, setSection] = useState("dashboard");
   const [registering, setRegistering] = useState(false);
+  /* Set by Students when "Lesson" is tapped on someone, read once by the
+     calendar's add sheet, then cleared. Carrying it in state rather than a
+     route keeps the portal's one-screen-at-a-time shape. */
+  const [bookFor, setBookFor] = useState(null);
   const [profile, setProfile] = useState(null);
   const [draft, setDraft] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -192,7 +201,13 @@ export default function InstructorPortal({ onExitRole }) {
               onOpenEnquiries={() => setSection("enquiries")}
             />
           )
-          : section === "enquiries" ? <Enquiries />
+          : section === "students" ? (
+              <Students onBookFor={(student) => { setBookFor(student); setSection("calendar"); }} />
+            )
+          : section === "calendar" ? (
+              <CalendarScreen bookFor={bookFor} onBooked={() => setBookFor(null)} />
+            )
+          : section === "enquiries" ? <Enquiries onAddedStudent={() => setSection("students")} />
           : <ComingSoon section={active} />}
       </div>
     </div>
@@ -206,9 +221,43 @@ export default function InstructorPortal({ onExitRole }) {
    exist — which is the truthful state, not a broken one, so each tile says
    what it counts rather than just showing a bare 0.
    --------------------------------------------------------------------------- */
+function num(v) { return typeof v === "number" ? String(v) : "—"; }
+
 function InstructorDashboard({ loading, status, profile, draft, onRegister, onOpenEnquiries }) {
   const { user } = useAuth();
   const [newEnquiries, setNewEnquiries] = useState(undefined);
+  const [counts, setCounts] = useState({});
+
+  /* Counted here rather than through instructor_stats() so the dashboard
+     degrades a tile at a time: with sql/10 missing the student and lesson
+     tiles stay blank and the enquiry one still works, instead of one failed
+     call emptying all four. */
+  useEffect(() => {
+    let off = false;
+    if (!user?.id) return;
+
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+    const weekEnd = new Date(dayStart); weekEnd.setDate(weekEnd.getDate() + 7);
+
+    (async () => {
+      const [today, week, students] = await Promise.all([
+        listLessons(user.id, { from: dayStart, to: dayEnd }),
+        listLessons(user.id, { from: new Date(), to: weekEnd }),
+        listStudents(user.id),
+      ]);
+      if (off) return;
+      setCounts({
+        today: today.error ? undefined
+          : today.rows.filter(l => l.status === "scheduled").length,
+        week: week.error ? undefined
+          : week.rows.filter(l => l.status === "scheduled").length,
+        students: students.error ? undefined : students.rows.length,
+      });
+    })();
+
+    return () => { off = true; };
+  }, [user?.id]);
 
   /* Only worth asking once verified — nobody can find an unlisted instructor
      to enquire with, so the answer is always zero and the failure when
@@ -235,9 +284,23 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
           />}
 
       <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Today's lessons" value="—" note="Nothing booked yet" />
-        <Stat label="This week" value="—" note="Earnings once paid lessons run" />
-        <Stat label="Active students" value="—" note="Yours plus marketplace" />
+        <Stat
+          label="Today's lessons"
+          value={num(counts.today)}
+          note={typeof counts.today === "number"
+            ? (counts.today ? "Scheduled for today" : "Nothing on today")
+            : "Nothing booked yet"}
+        />
+        <Stat
+          label="Next 7 days"
+          value={num(counts.week)}
+          note={typeof counts.week === "number" ? "Lessons scheduled" : "Lessons once you add them"}
+        />
+        <Stat
+          label="Active students"
+          value={num(counts.students)}
+          note={typeof counts.students === "number" ? "Yours plus marketplace" : "Yours plus marketplace"}
+        />
         {/* The one tile with something real behind it. The other three wait
             on a calendar and bookings; a number here would have to be
             invented, and this dashboard says why rather than doing that. */}

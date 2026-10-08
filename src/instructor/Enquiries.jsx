@@ -24,10 +24,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   MessageSquare, Phone, MapPin, Check, X, Loader2, AlertCircle, RefreshCw,
+  UserPlus,
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import { EmptyState, PrimaryButton, SecondaryButton } from "../ui";
 import { receivedEnquiries, setEnquiryStatus } from "../marketplace";
+import { addStudent } from "./teachingStore";
 import { when } from "../admin/reviewStore";
 
 const QUEUES = [
@@ -36,7 +38,7 @@ const QUEUES = [
   { id: "declined", label: "Declined", blurb: "You couldn't take them on" },
 ];
 
-export default function Enquiries() {
+export default function Enquiries({ onAddedStudent }) {
   const { user } = useAuth();
   const [queue, setQueue] = useState("new");
   const [rows, setRows] = useState([]);
@@ -123,16 +125,44 @@ export default function Enquiries() {
 
       <div className="mt-4 space-y-3">
         {shown.map(row => (
-          <EnquiryCard key={row.id} row={row} onDone={refresh} />
+          <EnquiryCard key={row.id} row={row} onDone={refresh} onAddedStudent={onAddedStudent} />
         ))}
       </div>
     </>
   );
 }
 
-function EnquiryCard({ row, onDone }) {
+function EnquiryCard({ row, onDone, onAddedStudent }) {
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState(null);
+  const [added, setAdded] = useState(false);
+
+  /* The whole point of an enquiry. Everything the learner typed is already
+     here, so retyping it into the student form would be busywork — and
+     busywork is where a name gets spelled two different ways.
+
+     learner_id carries across, which is what links this student to a
+     platform account, and source 'marketplace' is what will one day decide
+     the fee. An instructor's own students stay free, forever; that promise
+     needs this column to be right from the first row. */
+  async function keepAsStudent() {
+    setBusy(true); setProblem(null);
+    const r = await addStudent(user?.id, {
+      learner_id: row.learner_id,
+      full_name: row.learner_name || "Learner",
+      phone: row.learner_phone,
+      area: row.area,
+      notes: row.message,
+      source: "marketplace",
+    });
+    setBusy(false);
+    if (!r.ok) { setProblem(r.error); return; }
+    setAdded(true);
+    if (row.status === "new") await setEnquiryStatus(row.id, "answered");
+    await onDone();
+    onAddedStudent?.();
+  }
 
   async function mark(status) {
     setBusy(true);
@@ -182,17 +212,30 @@ function EnquiryCard({ row, onDone }) {
         </div>
       )}
 
-      {row.status === "new" && (
+      {added && (
+        <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+          <Check size={15} /> Added to your students
+        </p>
+      )}
+
+      {row.status !== "declined" && !added && (
         <div className="mt-4 flex flex-wrap gap-2">
-          <PrimaryButton full={false} disabled={busy} onClick={() => mark("answered")}>
+          <PrimaryButton full={false} disabled={busy} onClick={keepAsStudent}>
             <span className="inline-flex items-center gap-2">
-              {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-              Mark as answered
+              {busy ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
+              Take them on
             </span>
           </PrimaryButton>
-          <SecondaryButton full={false} onClick={() => mark("declined")}>
-            <span className="inline-flex items-center gap-2"><X size={15} /> Can't take this on</span>
-          </SecondaryButton>
+          {row.status === "new" && (
+            <>
+              <SecondaryButton full={false} onClick={() => mark("answered")}>
+                <span className="inline-flex items-center gap-2"><Check size={15} /> Just answered</span>
+              </SecondaryButton>
+              <SecondaryButton full={false} onClick={() => mark("declined")}>
+                <span className="inline-flex items-center gap-2"><X size={15} /> Can't take this on</span>
+              </SecondaryButton>
+            </>
+          )}
         </div>
       )}
     </div>
