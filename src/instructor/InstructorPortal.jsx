@@ -24,10 +24,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard, Calendar, Users, CalendarCheck, Clock, Store,
-  Wallet, Star, MessageSquare, UserCircle, ChevronLeft, Hammer,
+  Wallet, Star, MessageSquare, UserCircle, Hammer,
   ShieldCheck, ShieldAlert, Clock3, Loader2, Pencil,
 } from "lucide-react";
-import { Logo, EmptyState, PrimaryButton, SecondaryButton, AccountMenu } from "../ui";
+import {
+  Logo, EmptyState, PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge,
+} from "../ui";
 import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
 import { portalsFor } from "../portals";
@@ -36,6 +38,8 @@ import Students from "./Students";
 /* Aliased: lucide-react exports a Calendar icon too, and the collision is
    a build error rather than a warning. Same reason as RouteIcon in App.jsx. */
 import CalendarScreen from "./Calendar";
+import Availability from "./Availability";
+import Account from "./Account";
 import { receivedEnquiries } from "../marketplace";
 import { listLessons, listStudents } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
@@ -43,38 +47,31 @@ import { loadProfile, readDraft } from "./instructorStore";
 
 /* The nav from STEP 11, in the order an instructor's day actually runs:
    what's on today, then the calendar it sits in, then the people in it. */
+/* Account sits second on purpose. It used to be last, eleven chips along a
+   sideways scroll, which is nowhere — and the only way to edit a profile was
+   a button hidden inside the verification card on the dashboard. Someone
+   looking for their own details looks for "Account", and now it is the first
+   thing after the dashboard. */
 const SECTIONS = [
   { id: "dashboard",    label: "Dashboard",    icon: LayoutDashboard },
+  { id: "account",      label: "Account",      icon: UserCircle },
   { id: "calendar",     label: "Calendar",     icon: Calendar },
   { id: "students",     label: "Students",     icon: Users },
   { id: "enquiries",    label: "Enquiries",    icon: MessageSquare },
-  { id: "bookings",     label: "Bookings",     icon: CalendarCheck },
   { id: "availability", label: "Availability", icon: Clock },
+  { id: "bookings",     label: "Bookings",     icon: CalendarCheck },
   { id: "marketplace",  label: "Marketplace",  icon: Store },
   { id: "earnings",     label: "Earnings",     icon: Wallet },
   { id: "reviews",      label: "Reviews",      icon: Star },
   { id: "messages",     label: "Messages",     icon: MessageSquare },
-  { id: "profile",      label: "Profile",      icon: UserCircle },
 ];
 
 /* What each section will be, said once, in the section itself. These are
    promises the schema already has a shape for — not marketing copy. */
 const COMING = {
-  calendar: {
-    title: "Your calendar",
-    message: "Day, week and month views of every lesson — your own students and marketplace bookings side by side, with the free slots in between.",
-  },
-  students: {
-    title: "Your students",
-    message: "Add the students you already teach, and see the ones the marketplace sends you. Your own students never carry an acquisition fee.",
-  },
   bookings: {
     title: "Bookings",
-    message: "Requests to accept or decline, upcoming lessons, and the history behind each one.",
-  },
-  availability: {
-    title: "Availability",
-    message: "Working days and hours, breaks, holidays, travel buffers and how much notice you need — the rules the marketplace books against.",
+    message: "Requests from learners to accept or decline. Your hours and terms are set under Availability; what is missing is the server-side piece that holds a slot so two learners cannot claim the same hour.",
   },
   marketplace: {
     title: "Marketplace",
@@ -91,10 +88,6 @@ const COMING = {
   messages: {
     title: "Messages",
     message: "Talk to students about a booking without handing over your personal number.",
-  },
-  profile: {
-    title: "Your profile",
-    message: "ADI number and verification, areas served, transmission, lesson types, prices and photos — this is what a learner compares you on.",
   },
 };
 
@@ -198,6 +191,7 @@ export default function InstructorPortal({ onExitRole }) {
               profile={profile}
               draft={draft}
               onRegister={() => setRegistering(true)}
+              onOpenAccount={() => setSection("account")}
               onOpenEnquiries={() => setSection("enquiries")}
             />
           )
@@ -208,6 +202,16 @@ export default function InstructorPortal({ onExitRole }) {
               <CalendarScreen bookFor={bookFor} onBooked={() => setBookFor(null)} />
             )
           : section === "enquiries" ? <Enquiries onAddedStudent={() => setSection("students")} />
+          : section === "availability" ? <Availability />
+          : section === "account" ? (
+              <Account
+                loading={loading}
+                status={status}
+                profile={profile}
+                draft={draft}
+                onRegister={() => setRegistering(true)}
+              />
+            )
           : <ComingSoon section={active} />}
       </div>
     </div>
@@ -223,7 +227,7 @@ export default function InstructorPortal({ onExitRole }) {
    --------------------------------------------------------------------------- */
 function num(v) { return typeof v === "number" ? String(v) : "—"; }
 
-function InstructorDashboard({ loading, status, profile, draft, onRegister, onOpenEnquiries }) {
+function InstructorDashboard({ loading, status, profile, draft, onRegister, onOpenAccount, onOpenEnquiries }) {
   const { user } = useAuth();
   const [newEnquiries, setNewEnquiries] = useState(undefined);
   const [counts, setCounts] = useState({});
@@ -274,14 +278,20 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
 
   return (
     <>
+      {/* A panel is for something that needs doing. Once the ADI number has
+          been checked there is nothing to do, so the panel becomes a line:
+          the badge, and where to go to change anything. Everything else about
+          the profile lives under Account now. */}
       {loading
         ? <StatusSkeleton />
-        : <VerificationCard
-            status={status}
-            profile={profile}
-            draft={draft}
-            onRegister={onRegister}
-          />}
+        : status === "verified"
+          ? <VerifiedLine profile={profile} onOpenAccount={onOpenAccount} />
+          : <VerificationCard
+              status={status}
+              profile={profile}
+              draft={draft}
+              onRegister={onRegister}
+            />}
 
       <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat
@@ -321,9 +331,11 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
           </h2>
         </div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Your calendar, students and the marketplace are next. Nothing is
-          booked yet, and no numbers are being invented in the meantime —
-          every tile above stays blank until there is a real booking behind it.
+          Your calendar, students and availability are working now. Taking a
+          booking from a learner is next, and it needs a server: holding a slot
+          so two people cannot claim the same hour is not something a browser
+          can promise. Until then nothing above is invented — every tile stays
+          blank rather than show a number with nothing behind it.
         </p>
       </div>
 
@@ -443,19 +455,32 @@ function VerificationCard({ status, profile, draft, onRegister }) {
     );
   }
 
-  /* Verified */
+  /* 'verified' never reaches here — the dashboard shows VerifiedLine instead,
+     and Account carries the detail. Anything else is a status the database
+     grew that this screen has not been taught, and saying nothing is better
+     than guessing at it. */
+  return null;
+}
+
+/* ---------------------------------------------------------------------------
+   The verified state, which is a badge and not an announcement.
+   --------------------------------------------------------------------------- */
+function VerifiedLine({ profile, onOpenAccount }) {
   return (
-    <Panel tone="green" icon={ShieldCheck} title="Verified ADI">
-      <p>
-        ADI number <strong>{profile?.adi_number}</strong> checked against the RSA
-        register. {profile?.listed
-          ? "Your profile is visible to learners."
-          : "Your profile is verified but not listed yet — that switch arrives with the marketplace."}
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 flex items-center gap-3">
+      <VerifiedBadge />
+      <p className="flex-1 min-w-0 text-xs text-slate-500 dark:text-slate-400 truncate">
+        {profile?.listed
+          ? "Listed — learners can find you."
+          : "Not listed yet; that switch arrives with the marketplace."}
       </p>
-      <div className="mt-4">
-        <SecondaryButton onClick={onRegister}>Edit my profile</SecondaryButton>
-      </div>
-    </Panel>
+      <button
+        onClick={onOpenAccount}
+        className="shrink-0 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+      >
+        Account
+      </button>
+    </div>
   );
 }
 

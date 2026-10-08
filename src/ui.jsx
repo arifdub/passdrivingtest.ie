@@ -8,7 +8,7 @@
 */
 
 import React from "react";
-import { ChevronLeft, ChevronRight, Lock, LogOut, Repeat, X } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Lock, LogOut, Repeat, X } from "lucide-react";
 
 /* ------------------------------------------------------------------------- */
 /* The brand lockup: the wheel from public/logo.png with the name set in live
@@ -282,6 +282,33 @@ export function Tile({
         <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 shrink-0 mt-2.5" />
       )}
     </button>
+  );
+}
+
+/* ------------------------------------------------------------------------- */
+/* THE VERIFIED BADGE
+
+   One mark, used everywhere "verified" is claimed — the instructor's own
+   account screen, the directory, and whatever a learner sees next to a
+   booking. It exists as a component rather than as copied markup so that
+   what it LOOKS like and what it MEANS cannot drift apart: a second,
+   slightly different green tick somewhere in the product is how a badge
+   stops being evidence of anything.
+
+   It says "Verified ADI". Not "trusted", not "top rated" — the only thing
+   that has actually been checked is that the ADI number is on the RSA
+   register, and the badge should not imply a word more than that. */
+export function VerifiedBadge({ size = "md", className = "" }) {
+  const small = size === "sm";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 ${
+        small ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs"
+      } ${className}`}
+    >
+      <BadgeCheck size={small ? 12 : 14} className="shrink-0" />
+      Verified ADI
+    </span>
   );
 }
 
