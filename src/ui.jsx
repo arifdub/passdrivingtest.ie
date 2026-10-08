@@ -7,7 +7,7 @@
   ===========================================================================
 */
 
-import React from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { BadgeCheck, ChevronLeft, ChevronRight, Lock, LogOut, Repeat, X } from "lucide-react";
 
 /* ------------------------------------------------------------------------- */
@@ -285,6 +285,51 @@ export function Tile({
   );
 }
 
+
+/* ---------------------------------------------------------------------------
+   DISMISSING AN OPEN MENU
+
+   A menu that can only be closed by hitting the same button again feels
+   stuck, and on a phone it is worse than stuck: the panel covers the thing
+   you were trying to tap, so your next tap goes to the panel's backdrop and
+   nothing at all happens.
+
+   The landing page has had this since the start — a few lines of script
+   around its <details> menu. The React app never got it, so the account
+   menu and the notification panel both sat there until you found the exact
+   button again.
+
+   One hook now, used by both, which also gives cross-dismissal for free:
+   tapping the bell is "outside" the account menu, so the account menu
+   closes and the bell opens, which is what anybody would expect.
+
+   pointerdown rather than click, in the capture phase, so the menu is gone
+   before the thing you tapped reacts. Escape closes too, for a keyboard.
+   --------------------------------------------------------------------------- */
+export function useDismiss(ref, open, onClose) {
+  /* Kept in a ref so the effect does not re-subscribe on every render just
+     because the caller passed a fresh arrow function. */
+  const close = useRef(onClose);
+  close.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+
+    const outside = (e) => {
+      const el = ref.current;
+      if (el && !el.contains(e.target)) close.current();
+    };
+    const esc = (e) => { if (e.key === "Escape") close.current(); };
+
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [ref, open]);
+}
+
 /* ------------------------------------------------------------------------- */
 /* THE VERIFIED BADGE
 
@@ -457,8 +502,10 @@ export function SettingsGroup({ title, children }) {
    signed in, because on a platform where one person may hold two sides and an
    admin may hold three, "signed in as who?" is a real question.
 
-   <details> again: opens, closes and takes keyboard focus with no state and
-   no library. The script-free version of a menu.
+   It used to be a <details>, which opens and closes with no state and no
+   library — but <details> does not close when you tap somewhere else, and
+   on a phone that is the only gesture anyone tries. It is controlled now,
+   with useDismiss above doing the closing.
    --------------------------------------------------------------------------- */
 export function AccountMenu({
   email,
@@ -487,32 +534,51 @@ export function AccountMenu({
     .join("")
     .toUpperCase() || "?";
 
+  const [open, setOpen] = useState(false);
+  const root = useRef(null);
+  useDismiss(root, open, useCallback(() => setOpen(false), []));
+
   return (
-    <details className="relative group">
-      <summary
+    <div className="relative" ref={root}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
         className={
           variant === "avatar"
-            ? "list-none cursor-pointer inline-flex items-center gap-0.5 pl-0.5 pr-1 py-0.5 rounded-full hover:bg-white/10 transition [&::-webkit-details-marker]:hidden"
-            : "list-none cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:text-white hover:border-white/40 transition [&::-webkit-details-marker]:hidden"
+            ? "cursor-pointer inline-flex items-center gap-0.5 pl-0.5 pr-1 py-0.5 rounded-full hover:bg-white/10 transition"
+            : "cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:text-white hover:border-white/40 transition"
         }
-        aria-label="Account menu"
       >
         {variant === "avatar" ? (
           <>
             <span className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-slate-900 text-xs font-black flex items-center justify-center">
               {initials}
             </span>
-            <ChevronRight size={14} className="text-slate-400 rotate-90 group-open:-rotate-90 transition-transform" />
+            <ChevronRight
+              size={14}
+              className={`text-slate-400 transition-transform ${open ? "-rotate-90" : "rotate-90"}`}
+            />
           </>
         ) : (
           <>
             Account
-            <ChevronRight size={13} className="rotate-90 group-open:-rotate-90 transition-transform" />
+            <ChevronRight
+              size={13}
+              className={`transition-transform ${open ? "-rotate-90" : "rotate-90"}`}
+            />
           </>
         )}
-      </summary>
+      </button>
 
-      <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-[250px] max-w-[calc(100vw-40px)] rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl p-2">
+      {open && (
+      <div
+        role="menu"
+        onClick={() => setOpen(false)}
+        className="absolute right-0 top-[calc(100%+8px)] z-40 w-[250px] max-w-[calc(100vw-40px)] rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl p-2"
+      >
         {email && (
           <p className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 break-all">
             Signed in as<br />
@@ -553,6 +619,7 @@ export function AccountMenu({
           <LogOut size={15} className="shrink-0" /> Sign out
         </button>
       </div>
-    </details>
+      )}
+    </div>
   );
 }

@@ -21,7 +21,7 @@
   ===========================================================================
 */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Home, Calendar, Users, CalendarCheck, Clock, Store, Wallet, Star,
   MessageSquare, UserCircle, Hammer, ShieldCheck, ShieldAlert, Clock3,
@@ -29,7 +29,7 @@ import {
   UserPlus, Zap, CalendarClock, Banknote,
 } from "lucide-react";
 import {
-  Logo, PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge,
+  PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge, useDismiss,
 } from "../ui";
 import { useAuth } from "../appAuth";
 import { usePlatform } from "../platform";
@@ -901,6 +901,11 @@ function StatusSkeleton() {
    --------------------------------------------------------------------------- */
 function NotificationBell({ counts, onGo }) {
   const [open, setOpen] = useState(false);
+  const root = useRef(null);
+  /* Replaces a full-screen backdrop div that sat at z-30 — the same layer as
+     the bottom tab bar, so tapping a tab while this was open hit whichever
+     the browser felt like and usually did nothing at all. */
+  useDismiss(root, open, useCallback(() => setOpen(false), []));
   const total = waitingTotal(counts);
 
   const items = [
@@ -910,9 +915,11 @@ function NotificationBell({ counts, onGo }) {
   ].filter(i => i.n > 0);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={root}>
       <button
         onClick={() => setOpen(o => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         aria-label={total ? `${total} things waiting on you` : "Nothing waiting"}
         className="relative w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:bg-white/10 transition"
       >
@@ -925,9 +932,7 @@ function NotificationBell({ counts, onGo }) {
       </button>
 
       {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-40 w-72 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-4">
+          <div className="absolute right-0 top-full mt-1 z-40 w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-4">
             {counts === null ? (
               <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                 Couldn't check. This needs{" "}
@@ -972,7 +977,6 @@ function NotificationBell({ counts, onGo }) {
               aren't built yet.
             </p>
           </div>
-        </>
       )}
     </div>
   );
