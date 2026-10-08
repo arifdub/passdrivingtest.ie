@@ -23,9 +23,10 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  LayoutDashboard, Calendar, Users, CalendarCheck, Clock, Store,
-  Wallet, Star, MessageSquare, UserCircle, Hammer,
-  ShieldCheck, ShieldAlert, Clock3, Loader2, Pencil, Bell,
+  Home, Calendar, Users, CalendarCheck, Clock, Store, Wallet, Star,
+  MessageSquare, UserCircle, Hammer, ShieldCheck, ShieldAlert, Clock3,
+  Loader2, Pencil, Bell, ChevronRight, ChevronLeft, Plus, CalendarPlus,
+  UserPlus, Zap, CalendarClock, Banknote,
 } from "lucide-react";
 import {
   Logo, PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge,
@@ -48,30 +49,67 @@ import Account from "./Account";
 import { receivedEnquiries } from "../marketplace";
 import { receivedBookings, isPast } from "../bookingStore";
 import { whatIsWaiting, waitingTotal } from "../socialStore";
-import { listLessons, listStudents } from "./teachingStore";
+import { listLessons, listStudents, timeLabel, KIND_LABEL } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
 
 /* The nav from STEP 11, in the order an instructor's day actually runs:
    what's on today, then the calendar it sits in, then the people in it. */
-/* Account sits second on purpose. It used to be last, eleven chips along a
-   sideways scroll, which is nowhere — and the only way to edit a profile was
-   a button hidden inside the verification card on the dashboard. Someone
-   looking for their own details looks for "Account", and now it is the first
-   thing after the dashboard. */
-const SECTIONS = [
-  { id: "dashboard",    label: "Dashboard",    icon: LayoutDashboard },
-  { id: "account",      label: "Account",      icon: UserCircle },
-  { id: "calendar",     label: "Calendar",     icon: Calendar },
-  { id: "students",     label: "Students",     icon: Users },
-  { id: "enquiries",    label: "Enquiries",    icon: MessageSquare },
-  { id: "bookings",     label: "Bookings",     icon: CalendarCheck },
+/* WHAT IS A TAB AND WHAT IS NOT
+
+   Eleven sections will not fit in a bottom bar, and a bottom bar with eleven
+   things in it is a menu, not navigation. So four are tabs — the ones an
+   instructor opens every day — and the other seven are reached from the home
+   screen, which becomes a hub rather than a wall of chips.
+
+   Everything is still one tap from home. Nothing was buried to make the bar
+   fit; the bar was sized to what people actually use. */
+const TABS = [
+  { id: "dashboard", label: "Home",     icon: Home },
+  { id: "students",  label: "Students", icon: Users },
+  { id: "calendar",  label: "Calendar", icon: Calendar },
+  { id: "account",   label: "Account",  icon: UserCircle },
+];
+
+/* The big coloured cards at the top of home. Four, because a 2x2 grid is
+   what a thumb can reach without the phone moving in the hand. */
+const QUICK = [
+  { id: "students",  label: "Students",  icon: Users,          tone: "blue" },
+  { id: "calendar",  label: "Calendar",  icon: Calendar,       tone: "green" },
+  { id: "enquiries", label: "Enquiries", icon: MessageSquare,  tone: "orange" },
+  { id: "bookings",  label: "Bookings",  icon: CalendarCheck,  tone: "purple" },
+];
+
+/* Reached from home, under More. Not lesser — just not daily. */
+const MORE = [
   { id: "availability", label: "Availability", icon: Clock },
   { id: "marketplace",  label: "Marketplace",  icon: Store },
   { id: "earnings",     label: "Earnings",     icon: Wallet },
   { id: "reviews",      label: "Reviews",      icon: Star },
   { id: "messages",     label: "Messages",     icon: MessageSquare },
 ];
+
+const TITLES = {
+  dashboard: "Instructor Dashboard",
+  students: "Students", calendar: "Calendar", account: "Account",
+  enquiries: "Enquiries", bookings: "Bookings", availability: "Availability",
+  marketplace: "Marketplace", earnings: "Earnings", reviews: "Reviews",
+  messages: "Messages",
+};
+
+const BLURBS = {
+  students: "Manage your students and track their progress.",
+  calendar: "View and manage your lessons and bookings.",
+  enquiries: "Learners who have asked about lessons.",
+  bookings: "Requests to accept or decline.",
+  availability: "The hours you work and the terms you book on.",
+  marketplace: "How learners find you.",
+  earnings: "What you have taught, and what it was worth.",
+  reviews: "What your students said.",
+  messages: "Talk to a student about a lesson.",
+  account: "Your details and verification.",
+};
+
 
 export default function InstructorPortal({ onExitRole }) {
   const { user, signOut } = useAuth();
@@ -130,63 +168,79 @@ export default function InstructorPortal({ onExitRole }) {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      {/* Header */}
-      <div className="bg-slate-900 text-white">
-        <div
-          className="max-w-5xl mx-auto px-5 pb-4"
-          style={{ paddingTop: "max(1.5rem, calc(env(safe-area-inset-top) + 1rem))" }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <Logo size="sm" />
-            {/* Switch changes side without signing out; sign out ends the
-                session. Both live here because this screen has no Settings
-                to hide them in. */}
-            <div className="flex items-center gap-1">
-            <NotificationBell
-              counts={waiting}
-              onGo={(to) => setSection(to)}
-            />
-            <AccountMenu
-              email={user?.email}
-              portals={portalsFor({ accountRoles, isAdminAccount, here: "instructor" })}
-              onSwitch={onExitRole}
-              switchLabel="Back to the site"
-              onSignOut={signOut}
-            />
-            </div>
-          </div>
-          <h1 className="mt-3 text-xl font-black tracking-tight">Instructor portal</h1>
-          <p className="text-sm text-slate-400">
-            Keep your own students. We help you manage them and bring you new ones.
-          </p>
-        </div>
+  const isTab = TABS.some(t => t.id === section);
 
-        {/* Section nav — scrolls sideways on a phone, wraps on a laptop. */}
-        <div className="max-w-5xl mx-auto px-5 overflow-x-auto">
-          <div className="flex gap-1.5 w-max pb-2">
-            {SECTIONS.map(({ id, label, icon: Icon }) => {
-              const on = id === section;
-              return (
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      {/* ------------------------------------------------------------------ */}
+      {/* Header                                                             */}
+      {/*                                                                    */}
+      {/* A gradient rather than a flat bar, and the section's own title in  */}
+      {/* it rather than a fixed "Instructor portal" — so the top of the     */}
+      {/* screen tells you where you are instead of what the product is      */}
+      {/* called. You already know what it is called; you opened it.         */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 text-white">
+        <div
+          className="max-w-5xl mx-auto px-5 pb-5"
+          style={{ paddingTop: "max(1.25rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-2">
+              {/* A way back for the seven sections that are not tabs: the
+                  bar below cannot highlight them, so without this you can
+                  reach Earnings and then wonder how to leave it. */}
+              {!isTab && (
                 <button
-                  key={id}
-                  onClick={() => setSection(id)}
-                  className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold whitespace-nowrap transition ${
-                    on
-                      ? "bg-emerald-500 text-slate-900"
-                      : "bg-white/10 text-slate-300 hover:bg-white/20"
-                  }`}
+                  onClick={() => setSection("dashboard")}
+                  aria-label="Back to home"
+                  className="-ml-2 p-2 rounded-full text-slate-300 hover:bg-white/10 transition"
                 >
-                  <Icon size={14} /> {label}
+                  <ChevronLeft size={20} />
                 </button>
-              );
-            })}
+              )}
+              <div className="min-w-0">
+                {/* "Instructor Dashboard" needs ~230px and a 320px phone
+                    leaves ~180 once the bell and avatar are placed, so it
+                    truncated to "Instructor Da…". A short form beats an
+                    ellipsis: nobody needs telling they are in the instructor
+                    app, they opened it. */}
+                <h1 className="text-xl font-black tracking-tight truncate">
+                  {section === "dashboard" ? (
+                    <>
+                      <span className="min-[360px]:hidden">Dashboard</span>
+                      <span className="hidden min-[360px]:inline">Instructor Dashboard</span>
+                    </>
+                  ) : (TITLES[section] || "Instructor")}
+                </h1>
+                <p className="text-sm text-slate-400 truncate">
+                  {section === "dashboard"
+                    ? (profile?.full_name || user?.email || "")
+                    : (BLURBS[section] || "")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              <NotificationBell counts={waiting} onGo={(to) => setSection(to)} />
+              <AccountMenu
+                variant="avatar"
+                email={user?.email}
+                portals={portalsFor({ accountRoles, isAdminAccount, here: "instructor" })}
+                onSwitch={onExitRole}
+                switchLabel="Back to the site"
+                onSignOut={signOut}
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-5 py-6 pb-24">
+      {/* pb leaves room for the bar, plus whatever the home indicator takes. */}
+      <div
+        className="max-w-5xl mx-auto px-5 py-5"
+        style={{ paddingBottom: "calc(6.5rem + env(safe-area-inset-bottom))" }}
+      >
         {section === "dashboard"
           ? (
             <InstructorDashboard
@@ -195,9 +249,7 @@ export default function InstructorPortal({ onExitRole }) {
               profile={profile}
               draft={draft}
               onRegister={() => setRegistering(true)}
-              onOpenAccount={() => setSection("account")}
-              onOpenBookings={() => setSection("bookings")}
-              onOpenEnquiries={() => setSection("enquiries")}
+              onGo={setSection}
             />
           )
           : section === "students" ? (
@@ -231,7 +283,66 @@ export default function InstructorPortal({ onExitRole }) {
             )
           : null}
       </div>
+
+      <TabBar section={section} onGo={setSection} waiting={waiting} />
     </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   THE BOTTOM BAR
+
+   Fixed, four items, and padded for the home indicator — without
+   env(safe-area-inset-bottom) the labels sit under the bar on every iPhone
+   since the X, which is the single most common way a web app gives itself
+   away as a web app.
+
+   A dot rather than a number on Students and Calendar: the exact count is on
+   the bell and on the home screen, and a bar that shouts is a bar people
+   learn to ignore.
+   --------------------------------------------------------------------------- */
+function TabBar({ section, onGo, waiting }) {
+  /* A section that is not a tab still belongs somewhere, so Home stays lit
+     rather than nothing being lit at all. */
+  const active = TABS.some(t => t.id === section) ? section : "dashboard";
+  const pending = waitingTotal(waiting);
+
+  return (
+    <nav
+      className="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      <div className="max-w-5xl mx-auto grid grid-cols-4">
+        {TABS.map(({ id, label, icon: Icon }) => {
+          const on = id === active;
+          return (
+            <button
+              key={id}
+              onClick={() => onGo(id)}
+              aria-current={on ? "page" : undefined}
+              className="relative flex flex-col items-center gap-1 py-2.5 transition"
+            >
+              <span className={`relative flex items-center justify-center w-14 h-8 rounded-full transition ${
+                on ? "bg-emerald-500/15" : ""
+              }`}>
+                <Icon
+                  size={21}
+                  className={on ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}
+                />
+                {id === "dashboard" && pending > 0 && !on && (
+                  <span className="absolute top-1 right-3 w-2 h-2 rounded-full bg-red-500" />
+                )}
+              </span>
+              <span className={`text-[11px] font-bold ${
+                on ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"
+              }`}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -242,12 +353,14 @@ export default function InstructorPortal({ onExitRole }) {
    exist — which is the truthful state, not a broken one, so each tile says
    what it counts rather than just showing a bare 0.
    --------------------------------------------------------------------------- */
-function num(v) { return typeof v === "number" ? String(v) : "—"; }
 
-function InstructorDashboard({ loading, status, profile, draft, onRegister, onOpenAccount, onOpenBookings, onOpenEnquiries }) {
+function InstructorDashboard({
+  loading, status, profile, draft, onRegister, onGo,
+}) {
   const { user } = useAuth();
   const [newEnquiries, setNewEnquiries] = useState(undefined);
   const [counts, setCounts] = useState({});
+  const [today, setToday] = useState([]);
 
   /* Counted here rather than through instructor_stats() so the dashboard
      degrades a tile at a time: with sql/10 missing the student and lesson
@@ -262,16 +375,19 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
     const weekEnd = new Date(dayStart); weekEnd.setDate(weekEnd.getDate() + 7);
 
     (async () => {
-      const [today, week, students, requests] = await Promise.all([
+      const [todays, week, students, requests] = await Promise.all([
         listLessons(user.id, { from: dayStart, to: dayEnd }),
         listLessons(user.id, { from: new Date(), to: weekEnd }),
         listStudents(user.id),
         receivedBookings(user.id, { status: "requested" }),
       ]);
       if (off) return;
+
+      const scheduledToday = todays.error
+        ? [] : todays.rows.filter(l => l.status === "scheduled");
+      setToday(scheduledToday);
       setCounts({
-        today: today.error ? undefined
-          : today.rows.filter(l => l.status === "scheduled").length,
+        today: todays.error ? undefined : scheduledToday.length,
         week: week.error ? undefined
           : week.rows.filter(l => l.status === "scheduled").length,
         students: students.error ? undefined : students.rows.length,
@@ -299,60 +415,92 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
     return () => { off = true; };
   }, [status, user?.id]);
 
+  const firstName = (profile?.full_name || "").trim().split(/\s+/)[0]
+    || (user?.email || "").split("@")[0];
+
   return (
     <>
-      {/* A panel is for something that needs doing. Once the ADI number has
-          been checked there is nothing to do, so the panel becomes a line:
-          the badge, and where to go to change anything. Everything else about
-          the profile lives under Account now. */}
-      {loading
-        ? <StatusSkeleton />
-        : status === "verified"
-          ? <VerifiedLine profile={profile} onOpenAccount={onOpenAccount} />
-          : <VerificationCard
-              status={status}
-              profile={profile}
-              draft={draft}
-              onRegister={onRegister}
-            />}
+      {/* ---------------------------------------------------------------- */}
+      {/* Greeting                                                         */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white p-5 shadow-lg shadow-blue-900/20">
+        <p className="text-sm font-semibold text-blue-100">{greeting()},</p>
+        <h2 className="text-2xl font-black tracking-tight capitalize">
+          {firstName} <span className="not-italic">👋</span>
+        </h2>
+        <p className="mt-1.5 text-sm text-blue-100 leading-relaxed">
+          {counts.today
+            ? `You have ${counts.today} lesson${counts.today === 1 ? "" : "s"} on today.`
+            : "Your students, lessons and bookings, all in one place."}
+        </p>
+      </div>
 
-      <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* ---------------------------------------------------------------- */}
+      {/* Where to go                                                      */}
+      {/* ---------------------------------------------------------------- */}
+      {/* Two columns on the narrowest phones. At 320px four tiles leave
+          about 38px for a label, and "Enquiries" needs sixty — it rendered
+          as "Enquirie". A 2x2 grid there is bigger to hit and reads
+          properly; 360px and up gets the row of four. */}
+      <div className="mt-4 grid grid-cols-2 min-[360px]:grid-cols-4 gap-2.5">
+        {QUICK.map(({ id, label, icon: Icon, tone }) => (
+          <button
+            key={id}
+            onClick={() => onGo(id)}
+            className={`rounded-2xl px-1.5 py-3.5 text-white text-center transition active:scale-95 ${QUICK_TONES[tone]}`}
+          >
+            <span className="relative inline-flex">
+              <Icon size={22} />
+              {/* A count only where there is something to answer. A badge
+                  reading 0 is a badge nobody believes. */}
+              {id === "bookings" && counts.requests > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-[10px] font-black flex items-center justify-center tabular-nums">
+                  {counts.requests}
+                </span>
+              )}
+              {id === "enquiries" && newEnquiries > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-[10px] font-black flex items-center justify-center tabular-nums">
+                  {newEnquiries}
+                </span>
+              )}
+            </span>
+            <span className="mt-1.5 block text-[11px] font-black leading-tight truncate">
+              {label}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* The numbers                                                      */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         <Stat
-          label="Today's lessons"
-          value={num(counts.today)}
-          note={typeof counts.today === "number"
-            ? (counts.today ? "Scheduled for today" : "Nothing on today")
-            : "Nothing booked yet"}
+          tone="emerald" icon={CalendarClock}
+          value={counts.today} label="Today's Lessons"
+          onClick={() => onGo("calendar")}
         />
         <Stat
-          label="Next 7 days"
-          value={num(counts.week)}
-          note={typeof counts.week === "number" ? "Lessons scheduled" : "Lessons once you add them"}
+          tone="blue" icon={Calendar}
+          value={counts.week} label="Next 7 Days"
+          onClick={() => onGo("calendar")}
         />
         <Stat
-          label="Active students"
-          value={num(counts.students)}
-          note={typeof counts.students === "number" ? "Yours plus marketplace" : "Yours plus marketplace"}
+          tone="amber" icon={Users}
+          value={counts.students} label="Active Students"
+          onClick={() => onGo("students")}
         />
-        {/* The one tile with something real behind it. The other three wait
-            on a calendar and bookings; a number here would have to be
-            invented, and this dashboard says why rather than doing that. */}
         <Stat
-          label="New enquiries"
-          value={typeof newEnquiries === "number" ? String(newEnquiries) : "—"}
-          note={typeof newEnquiries === "number"
-            ? (newEnquiries ? "Waiting for you" : "None waiting")
-            : "From learners nearby"}
+          tone="violet" icon={MessageSquare}
+          value={newEnquiries} label="New Enquiries"
+          onClick={() => onGo("enquiries")}
         />
       </div>
 
-      {/* Not a sixth tile. A booking request is the one thing on this screen
-          that someone is waiting on an answer to, so it gets a line of its
-          own and a way straight to it — and it is absent entirely when there
-          is nothing to answer, rather than sitting there reading zero. */}
+      {/* The one thing on this screen somebody is waiting on an answer to. */}
       {counts.requests > 0 && (
         <button
-          onClick={onOpenBookings}
+          onClick={() => onGo("bookings")}
           className="mt-3 w-full text-left rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 p-4 flex items-center gap-3"
         >
           <CalendarCheck size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -366,18 +514,127 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
               The hour stays held until you accept or decline.
             </p>
           </div>
-          <span className="shrink-0 text-xs font-bold text-emerald-700 dark:text-emerald-400">
-            Open
-          </span>
+          <ChevronRight size={16} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
         </button>
       )}
 
-      {/* This card has been a running list of what does not work yet. Every
-          section now does, so the only honest thing left on it is the one
-          real gap — you have to open the app to find out anything happened.
-          A card claiming things are "still being built" when they are built
-          is worse than no card: it teaches people not to read it. */}
-      <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      {/* Verification, while there is still something to do about it. */}
+      {loading
+        ? <div className="mt-4"><StatusSkeleton /></div>
+        : status === "verified"
+          ? null
+          : (
+            <div className="mt-4">
+              <VerificationCard
+                status={status} profile={profile} draft={draft}
+                onRegister={onRegister}
+              />
+            </div>
+          )}
+
+      <div className="mt-4 grid md:grid-cols-2 gap-4">
+        {/* -------------------------------------------------------------- */}
+        {/* Today                                                          */}
+        {/* -------------------------------------------------------------- */}
+        <Panel2 icon={Calendar} title="Upcoming Lessons">
+          {today.length ? (
+            <div className="space-y-2">
+              {today.slice(0, 4).map(l => (
+                <button
+                  key={l.id}
+                  onClick={() => onGo("calendar")}
+                  className="w-full text-left rounded-xl bg-slate-50 dark:bg-slate-900/60 p-3 flex items-center gap-3"
+                >
+                  <span className="text-sm font-black tabular-nums text-slate-900 dark:text-white shrink-0">
+                    {timeLabel(l.starts_at)}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-bold text-slate-900 dark:text-white truncate">
+                      {l.student?.full_name || "Student"}
+                    </span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      {KIND_LABEL[l.kind] || l.kind}
+                    </span>
+                  </span>
+                  <ChevronRight size={15} className="shrink-0 text-slate-400" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
+                <CalendarClock size={22} className="text-slate-400" />
+              </div>
+              <p className="font-bold text-sm text-slate-900 dark:text-white">
+                No lessons today
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Your lessons for today will appear here.
+              </p>
+            </div>
+          )}
+          <button
+            onClick={() => onGo("calendar")}
+            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 text-sm transition"
+          >
+            <Plus size={16} /> Add Lesson
+          </button>
+        </Panel2>
+
+        {/* -------------------------------------------------------------- */}
+        {/* Quick actions                                                  */}
+        {/* -------------------------------------------------------------- */}
+        <Panel2 icon={Zap} title="Quick Actions">
+          <div className="space-y-2">
+            <Action icon={UserPlus}     tone="emerald" label="Add New Student"   onClick={() => onGo("students")} />
+            <Action icon={CalendarPlus} tone="blue"    label="Add Lesson"        onClick={() => onGo("calendar")} />
+            <Action icon={MessageSquare} tone="violet" label="View Enquiries"    onClick={() => onGo("enquiries")} />
+            <Action icon={Clock}        tone="amber"   label="Check Availability" onClick={() => onGo("availability")} />
+          </div>
+        </Panel2>
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Everything else                                                  */}
+      {/* ---------------------------------------------------------------- */}
+      <h2 className="mt-6 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+        More
+      </h2>
+      <div className="mt-2 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 overflow-hidden">
+        {MORE.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => onGo(id)}
+            className="w-full text-left px-4 py-3.5 flex items-center gap-3 active:bg-slate-50 dark:active:bg-slate-700/50 transition"
+          >
+            <Icon size={17} className="text-slate-400 shrink-0" />
+            <span className="flex-1 text-sm font-bold text-slate-900 dark:text-white">
+              {label}
+            </span>
+            <ChevronRight size={16} className="text-slate-400 shrink-0" />
+          </button>
+        ))}
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Money and notifications, said once                               */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="mt-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5">
+        <div className="flex items-center gap-2.5">
+          <Banknote size={18} className="text-emerald-500 shrink-0" />
+          <h2 className="font-bold text-slate-900 dark:text-white">
+            Learners pay you directly
+          </h2>
+        </div>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          No card is taken on this site and the platform takes nothing — not
+          from your own students, not from the ones the directory sends you.
+          If that ever changes you will be told here first, in advance, and it
+          will not apply to anything already booked.
+        </p>
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5">
         <div className="flex items-center gap-2.5">
           <Hammer size={18} className="text-amber-500 shrink-0" />
           <h2 className="font-bold text-slate-900 dark:text-white">
@@ -385,39 +642,94 @@ function InstructorDashboard({ loading, status, profile, draft, onRegister, onOp
           </h2>
         </div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Every part of this portal works — your calendar, students,
-          availability, bookings, marketplace listing, earnings, reviews and
-          messages. What is missing is being <em>told</em>: no email when a
-          learner books, and no notification on your phone. Until that exists,
-          the only way to find a new request is to open this and look, so it
-          is worth a glance each morning.
-        </p>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Nothing above is invented either — a tile stays blank rather than
-          show a number with nothing behind it.
-        </p>
-      </div>
-
-      <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-        <h2 className="font-bold text-slate-900 dark:text-white">
-          Money doesn't come through here
-        </h2>
-        {/* This used to describe a commission on marketplace students. There
-            isn't one, and describing a fee that is not being charged is the
-            kind of thing an instructor reads once and remembers wrong for a
-            year. Said plainly instead, with what would happen if it ever
-            changed. */}
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Learners pay you directly, the way they already do. No card is taken
-          on this site, nothing is held, and the platform takes nothing — not
-          from your own students and not from the ones the directory sends you.
-        </p>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          If that ever changes you'll be told here first, before it applies,
-          and it won't apply to anything already booked.
+          Every part of this portal works. What is missing is being told: no
+          email when a learner books, and no notification on your phone. Until
+          that exists the only way to find a new request is to open this and
+          look, so it is worth a glance each morning.
         </p>
       </div>
     </>
+  );
+}
+
+/* Morning, afternoon or evening, by the clock on the device — which is the
+   instructor's own clock, which is the one that matters. */
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+const QUICK_TONES = {
+  blue:   "bg-gradient-to-br from-blue-500 to-blue-600",
+  green:  "bg-gradient-to-br from-emerald-500 to-emerald-600",
+  orange: "bg-gradient-to-br from-orange-500 to-orange-600",
+  purple: "bg-gradient-to-br from-violet-500 to-violet-600",
+};
+
+const STAT_TONES = {
+  emerald: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400",
+  blue:    "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400",
+  amber:   "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400",
+  violet:  "bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400",
+};
+
+/* A tile shows a dash, not a zero, when the number could not be read. Those
+   are different facts and the one thing this dashboard has never done is
+   invent a number. */
+function Stat({ tone, icon: Icon, value, label, onClick }) {
+  const known = typeof value === "number";
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-2xl p-3.5 text-left transition active:scale-[0.98] ${STAT_TONES[tone]}`}
+    >
+      <div className="flex items-start justify-between">
+        <Icon size={18} />
+        <ChevronRight size={14} className="opacity-50" />
+      </div>
+      <p className="mt-2 text-2xl font-black tabular-nums text-slate-900 dark:text-white">
+        {known ? value : "—"}
+      </p>
+      <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-tight">
+        {label}
+      </p>
+    </button>
+  );
+}
+
+function Panel2({ icon: Icon, title, children }) {
+  return (
+    <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon size={17} className="text-blue-500 shrink-0" />
+        <h2 className="font-black text-slate-900 dark:text-white">{title}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const ACTION_TONES = {
+  emerald: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400",
+  blue:    "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400",
+  violet:  "bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400",
+  amber:   "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400",
+};
+
+function Action({ icon: Icon, tone, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full rounded-xl px-3.5 py-3 flex items-center gap-3 transition active:scale-[0.98] ${ACTION_TONES[tone]}`}
+    >
+      <Icon size={17} className="shrink-0" />
+      <span className="flex-1 text-left text-sm font-bold text-slate-900 dark:text-white">
+        {label}
+      </span>
+      <ChevronRight size={15} className="opacity-50 shrink-0" />
+    </button>
   );
 }
 
@@ -570,22 +882,6 @@ function StatusSkeleton() {
   );
 }
 
-function Stat({ label, value, note }) {
-  return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-        {label}
-      </p>
-      <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white tabular-nums">
-        {value}
-      </p>
-      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-snug">
-        {note}
-      </p>
-    </div>
-  );
-}
-
 
 /* ---------------------------------------------------------------------------
    THE BELL
@@ -618,11 +914,11 @@ function NotificationBell({ counts, onGo }) {
       <button
         onClick={() => setOpen(o => !o)}
         aria-label={total ? `${total} things waiting on you` : "Nothing waiting"}
-        className="relative rounded-full p-2 text-slate-300 hover:bg-white/10 transition"
+        className="relative w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:bg-white/10 transition"
       >
         <Bell size={18} />
         {total > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-slate-900 text-[10px] font-black flex items-center justify-center px-1 tabular-nums">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center px-1 tabular-nums ring-2 ring-slate-900">
             {total > 9 ? "9+" : total}
           </span>
         )}

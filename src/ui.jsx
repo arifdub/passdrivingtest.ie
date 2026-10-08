@@ -471,15 +471,45 @@ export function AccountMenu({
      already looking at. An account with one side gets none of these and the
      menu is just "signed in as / sign out", which is what it was. */
   portals = [],
+  /* "avatar" is the compact trigger: initials in a circle, the way an app
+     header does it. The word ACCOUNT in a pill is 110px of a 390px screen,
+     and on the instructor dashboard it pushed the page title into an
+     ellipsis — "Instructor Das…". The menu behind it is identical. */
+  variant = "pill",
 }) {
+  const initials = (email || "?")
+    .split("@")[0]
+    .replace(/[^a-zA-Z]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(w => w[0])
+    .join("")
+    .toUpperCase() || "?";
+
   return (
     <details className="relative group">
       <summary
-        className="list-none cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:text-white hover:border-white/40 transition [&::-webkit-details-marker]:hidden"
+        className={
+          variant === "avatar"
+            ? "list-none cursor-pointer inline-flex items-center gap-0.5 pl-0.5 pr-1 py-0.5 rounded-full hover:bg-white/10 transition [&::-webkit-details-marker]:hidden"
+            : "list-none cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:text-white hover:border-white/40 transition [&::-webkit-details-marker]:hidden"
+        }
         aria-label="Account menu"
       >
-        Account
-        <ChevronRight size={13} className="rotate-90 group-open:-rotate-90 transition-transform" />
+        {variant === "avatar" ? (
+          <>
+            <span className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-slate-900 text-xs font-black flex items-center justify-center">
+              {initials}
+            </span>
+            <ChevronRight size={14} className="text-slate-400 rotate-90 group-open:-rotate-90 transition-transform" />
+          </>
+        ) : (
+          <>
+            Account
+            <ChevronRight size={13} className="rotate-90 group-open:-rotate-90 transition-transform" />
+          </>
+        )}
       </summary>
 
       <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-[250px] max-w-[calc(100vw-40px)] rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl p-2">
