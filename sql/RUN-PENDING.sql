@@ -957,7 +957,16 @@ create trigger instructor_enquiries_status
 -- enquiries addressed to them, so this is only saving round trips, but it
 -- keeps the dashboard to one call.
 -- ---------------------------------------------------------------------------
-create or replace function public.instructor_stats()
+-- Dropped first, not replaced. This file is re-runnable, and by the time it
+-- is run a second time section 10 below has usually already widened this
+-- function to five columns. A function's OUT parameters are its return type,
+-- so `create or replace` would stop with `42P13: cannot change return type
+-- of existing function` — narrowing is refused exactly as widening is.
+-- Section 10 widens it again a few hundred lines down, in this same
+-- transaction, so nothing is left narrow.
+drop function if exists public.instructor_stats();
+
+create function public.instructor_stats()
 returns table (new_enquiries bigint, open_enquiries bigint)
 language sql
 stable

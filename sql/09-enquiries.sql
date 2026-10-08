@@ -172,7 +172,13 @@ create trigger instructor_enquiries_status
 -- enquiries addressed to them, so this is only saving round trips, but it
 -- keeps the dashboard to one call.
 -- ---------------------------------------------------------------------------
-create or replace function public.instructor_stats()
+-- Dropped first, not replaced: if sql/10 has already widened this function
+-- to five columns, `create or replace` would stop with `42P13: cannot change
+-- return type of existing function`. Re-running the files in order has to
+-- stay safe, so narrow it explicitly rather than failing.
+drop function if exists public.instructor_stats();
+
+create function public.instructor_stats()
 returns table (new_enquiries bigint, open_enquiries bigint)
 language sql
 stable
