@@ -95,7 +95,40 @@ fi
 kept=$(q -d guarded -tAc "select note from public.bookings;")
 [ "$kept" = "real data" ] && echo "  ✓ refused, and the data is untouched" || { echo "  ✗ DATA LOST"; exit 1; }
 
-echo "6. the rules themselves — booking races, hours, notice, reviews, messages"
+echo "6. the documented way out: rename the old table, then migrate"
+# The real shape found in production — an older public booking form keyed on
+# a slot, with rows in it. The advice given was to rename rather than drop,
+# so that advice is tested: the migration must succeed, and not one of those
+# rows may go missing. Renaming does not rename a table's indexes, so this
+# also proves the old bookings_pkey does not collide with the new one.
+q -q -c "drop database if exists renamed;" -c "create database renamed;" >/dev/null 2>&1
+q -d renamed -q -f "$HERE/baseline.sql" >/dev/null 2>&1
+for f in "$SQL"/0[2-9]*.sql "$SQL"/1[01]*.sql; do
+  q -d renamed -q -v ON_ERROR_STOP=1 --single-transaction -f "$f" >/dev/null 2>&1
+done
+q -d renamed -q >/dev/null 2>&1 <<'EOSQL'
+create table public.bookings (
+  id uuid primary key default gen_random_uuid(),
+  slot_id uuid, lesson_type text, full_name text, email text, phone text,
+  created_at timestamptz default now()
+);
+insert into public.bookings (full_name, email, lesson_type)
+select 'learner ' || n, 'l' || n || '@example.ie', '1hr' from generate_series(1,4) n;
+alter table public.bookings rename to bookings_old_form;
+EOSQL
+if out=$(q -d renamed -v ON_ERROR_STOP=1 --single-transaction -f "$SQL"/RUN-NEXT.sql 2>&1) && ! echo "$out" | grep -q "^psql.*ERROR"; then
+  kept=$(q -d renamed -tAc "select count(*) from public.bookings_old_form;")
+  cols=$(q -d renamed -tAc "select count(*) from information_schema.columns where table_name='bookings';")
+  if [ "$kept" = "4" ] && [ "$cols" -gt 10 ]; then
+    echo "  ✓ migrated, and all 4 old rows are still there"
+  else
+    echo "  ✗ kept=$kept cols=$cols"; exit 1
+  fi
+else
+  echo "  ✗ the rename path does not work"; echo "$out" | grep -A2 ERROR | head -6; exit 1
+fi
+
+echo "7. the rules themselves — booking races, hours, notice, reviews, messages"
 out=$(q -d chain -f "$HERE/scenario.sql" 2>&1 || true)
 pass=$(printf '%s' "$out" | grep -c "PASS " || true)
 fail=$(printf '%s' "$out" | grep -c "FAIL " || true)
