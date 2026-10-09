@@ -408,3 +408,62 @@ begin
                and column_name = 'avatar_url'),
     'a learner has somewhere to keep a photo');
 end $$;
+
+-- --------------------------------------------------------------------------
+-- The bell clears on reading; the work does not
+--
+-- One number used to answer two questions — "what is new" and "what is still
+-- outstanding" — so it could only ever answer one, and the badge never went
+-- away. These assert the split holds in both directions, because getting it
+-- backwards would be worse: a bell that forgets a booking request nobody
+-- answered.
+-- --------------------------------------------------------------------------
+do $$
+declare
+  adi constant text := '11111111-1111-1111-1111-111111111111';
+  before_unseen bigint;
+  after_unseen  bigint;
+  before_work   bigint;
+  after_work    bigint;
+begin
+  perform pg_temp.be(adi);
+
+  select unseen, booking_requests into before_unseen, before_work
+    from public.my_waiting();
+  perform pg_temp.report(before_unseen > 0,
+    'a never-opened bell counts what is already there');
+
+  perform public.mark_notifications_seen();
+
+  select unseen, booking_requests into after_unseen, after_work
+    from public.my_waiting();
+  perform pg_temp.report(after_unseen = 0,
+    'opening the bell clears it');
+  perform pg_temp.report(after_work = before_work and after_work > 0,
+    'but the outstanding work is untouched');
+end $$;
+
+do $$
+declare
+  adi constant text := '11111111-1111-1111-1111-111111111111';
+  amy constant text := '22222222-2222-2222-2222-222222222222';
+  v_booking uuid;
+begin
+  -- Something new arriving after the look must light it up again.
+  select id into v_booking from public.bookings where status = 'accepted' limit 1;
+
+  perform pg_temp.be(amy);
+  insert into public.booking_messages (booking_id, sender_id, body)
+  values (v_booking, amy::uuid, 'are we still on for tomorrow?');
+
+  perform pg_temp.be(adi);
+  perform pg_temp.report(
+    (select unseen from public.my_waiting()) > 0,
+    'something arriving after the look lights it up again');
+
+  -- And reading the thread clears the outstanding count too.
+  perform public.mark_thread_read(v_booking);
+  perform pg_temp.report(
+    (select unread_messages from public.my_waiting()) = 0,
+    'reading a thread clears its unread count');
+end $$;

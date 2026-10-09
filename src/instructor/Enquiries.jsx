@@ -38,7 +38,7 @@ const QUEUES = [
   { id: "declined", label: "Declined", blurb: "You couldn't take them on" },
 ];
 
-export default function Enquiries({ onAddedStudent }) {
+export default function Enquiries({ onAddedStudent, onChanged }) {
   const { user } = useAuth();
   const [queue, setQueue] = useState("new");
   const [rows, setRows] = useState([]);
@@ -51,7 +51,10 @@ export default function Enquiries({ onAddedStudent }) {
     setRows(r);
     setError(e);
     setLoading(false);
-  }, [user?.id]);
+    /* An answered enquiry stops being outstanding, and the bar's count
+       lives a level up. */
+    onChanged?.();
+  }, [onChanged, user?.id]);
 
   useEffect(() => { refresh(); }, [refresh]);
 

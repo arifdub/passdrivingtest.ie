@@ -48,7 +48,9 @@ import Messages from "./Messages";
 import Account from "./Account";
 import { receivedEnquiries } from "../marketplace";
 import { receivedBookings, isPast } from "../bookingStore";
-import { whatIsWaiting, waitingTotal } from "../socialStore";
+import {
+  whatIsWaiting, waitingTotal, outstandingTotal, markNotificationsSeen,
+} from "../socialStore";
 import { listLessons, listStudents, timeLabel, KIND_LABEL } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
@@ -148,6 +150,12 @@ export default function InstructorPortal({ onExitRole }) {
      pocket will not light up, because that needs a service worker and VAPID
      keys on a server. The bell says what it knows and the panel behind it
      says what it cannot do. */
+  const recount = useCallback(async () => {
+    if (!user?.id) return;
+    const { counts } = await whatIsWaiting();
+    setWaiting(counts);
+  }, [user?.id]);
+
   useEffect(() => {
     if (!user?.id) return;
     let off = false;
@@ -228,7 +236,11 @@ export default function InstructorPortal({ onExitRole }) {
             </div>
 
             <div className="flex items-center gap-1 shrink-0">
-              <NotificationBell counts={waiting} onGo={(to) => setSection(to)} />
+              <NotificationBell
+                counts={waiting}
+                onGo={(to) => setSection(to)}
+                onSeen={async () => { await markNotificationsSeen(); await recount(); }}
+              />
               <AccountMenu
                 variant="avatar"
                 photoUrl={profile?.photo_url}
@@ -271,10 +283,10 @@ export default function InstructorPortal({ onExitRole }) {
           : section === "calendar" ? (
               <CalendarScreen bookFor={bookFor} onBooked={() => setBookFor(null)} />
             )
-          : section === "enquiries" ? <Enquiries onAddedStudent={() => setSection("students")} />
+          : section === "enquiries" ? <Enquiries onAddedStudent={() => setSection("students")} onChanged={recount} />
           : section === "availability" ? <Availability />
           : section === "bookings" ? (
-              <Bookings onAccepted={() => setSection("calendar")} />
+              <Bookings onAccepted={() => { recount(); setSection("calendar"); }} onChanged={recount} />
             )
           : section === "marketplace" ? (
               <Marketplace
@@ -284,7 +296,7 @@ export default function InstructorPortal({ onExitRole }) {
             )
           : section === "earnings" ? <Earnings />
           : section === "reviews" ? <Reviews />
-          : section === "messages" ? <Messages />
+          : section === "messages" ? <Messages onRead={recount} />
           : section === "account" ? (
               <Account
                 loading={loading}
@@ -924,14 +936,19 @@ function StatusSkeleton() {
    exist yet. Leaving that unsaid would have an instructor put their phone
    down expecting it to buzz when a booking arrives, and miss it.
    --------------------------------------------------------------------------- */
-function NotificationBell({ counts, onGo }) {
+function NotificationBell({ counts, onGo, onSeen }) {
   const [open, setOpen] = useState(false);
   const root = useRef(null);
   /* Replaces a full-screen backdrop div that sat at z-30 — the same layer as
      the bottom tab bar, so tapping a tab while this was open hit whichever
      the browser felt like and usually did nothing at all. */
   useDismiss(root, open, useCallback(() => setOpen(false), []));
+  /* The badge is what has ARRIVED since this was last opened. The list
+     below is what is still outstanding, seen or not — two different
+     questions that used to share one number, which is why the badge never
+     went away. */
   const total = waitingTotal(counts);
+  const outstanding = outstandingTotal(counts);
 
   const items = [
     { n: counts?.bookingRequests, to: "bookings",  label: "booking request",  plural: "booking requests" },
@@ -942,7 +959,14 @@ function NotificationBell({ counts, onGo }) {
   return (
     <div className="relative" ref={root}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          /* Opening it IS reading it. Marked immediately rather than on
+             close, because people read a panel and then tap straight
+             through to the thing it told them about. */
+          if (next) onSeen?.();
+        }}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={total ? `${total} things waiting on you` : "Nothing waiting"}
@@ -985,6 +1009,15 @@ function NotificationBell({ counts, onGo }) {
                 ) : (
                   <p className="text-sm text-slate-500 dark:text-slate-400">
                     Nothing waiting on you.
+                  </p>
+                )}
+
+                {/* Said once, where somebody who just watched the badge
+                    vanish might otherwise think the work vanished with it. */}
+                {outstanding > 0 && total === 0 && (
+                  <p className="mt-2 px-3 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Nothing new since you last looked. The counts above are
+                    still waiting on an answer.
                   </p>
                 )}
 

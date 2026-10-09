@@ -28,7 +28,7 @@ import {
 } from "../bookingStore";
 import { KIND_LABEL, euro } from "./teachingStore";
 
-export default function Bookings({ onAccepted }) {
+export default function Bookings({ onAccepted, onChanged }) {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +81,9 @@ export default function Bookings({ onAccepted }) {
     setBusy(null);
     if (!ok) { setError(e); return false; }
     await refresh();
+    /* The tab badge counts outstanding requests, so answering one has to
+       reach it — otherwise the number sits there until the next poll. */
+    onChanged?.();
     return true;
   };
 

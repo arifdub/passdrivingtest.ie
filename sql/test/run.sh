@@ -65,7 +65,7 @@ apply() { # apply <db> <file...>
   echo "  ✓ $*" | tr '\n' ' ' | cut -c1-110; echo
 }
 
-CHAIN=("$SQL"/0[2-9]*.sql "$SQL"/1[0-5]*.sql)
+CHAIN=("$SQL"/0[2-9]*.sql "$SQL"/1[0-6]*.sql)
 
 echo "1. every file in order"
 apply chain "${CHAIN[@]}"
@@ -135,7 +135,7 @@ fail=$(printf '%s' "$out" | grep -c "FAIL " || true)
 # A count of passes is checked as well as a count of failures: a scenario
 # that silently stopped running halfway would otherwise report zero failures
 # and look green.
-if [ "$fail" = "0" ] && [ "$pass" -ge 44 ]; then
+if [ "$fail" = "0" ] && [ "$pass" -ge 49 ]; then
   echo "  ✓ $pass checks, none failed"
 else
   echo "  ✗ $pass passed, $fail failed"

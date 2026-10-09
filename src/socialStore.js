@@ -200,15 +200,48 @@ export async function whatIsWaiting() {
       newEnquiries: Number(row.new_enquiries) || 0,
       unreadMessages: Number(row.unread_messages) || 0,
       lessonsToday: Number(row.lessons_today) || 0,
+      /* Arrived since the bell was last opened. Undefined rather than 0 when
+         sql/16 has not been run, so the caller can fall back on the
+         outstanding counts instead of showing a permanently clean bell. */
+      unseen: row.unseen === undefined || row.unseen === null
+        ? undefined : Number(row.unseen) || 0,
     },
     error: null,
   };
 }
 
-/* The one number on the bell. Lessons today are not in it: a lesson is not
-   something waiting on an answer, and counting it would mean the badge never
-   clears on a working day. */
+/* Opening the bell is what "seen" means. Returns nothing useful — the caller
+   re-reads the counts afterwards, because the server's now() is the only
+   clock that matters here. */
+export async function markNotificationsSeen() {
+  if (!HAS_SUPABASE) return;
+  try {
+    await supabase.rpc("mark_notifications_seen");
+  } catch {
+    /* Without sql/16 this function does not exist. The bell then keeps
+       showing outstanding work, which is the old behaviour — worse, but not
+       broken. */
+  }
+}
+
+/* The number on the bell: what has arrived since it was last opened.
+
+   NOT the outstanding work. Those are different questions and one number was
+   trying to answer both — which is why the badge never went away. A booking
+   request you have seen but not yet answered is still a person waiting, so
+   it stays on the Bookings tab; it just stops being news.
+
+   Falls back to the outstanding counts when `unseen` is absent, which means
+   sql/16 has not been run yet. A bell that is wrong in the old way beats a
+   bell that is silently always clean. */
 export function waitingTotal(counts) {
+  if (!counts) return 0;
+  if (typeof counts.unseen === "number") return counts.unseen;
+  return counts.bookingRequests + counts.newEnquiries + counts.unreadMessages;
+}
+
+/* What the panel lists: everything still wanting an answer, seen or not. */
+export function outstandingTotal(counts) {
   if (!counts) return 0;
   return counts.bookingRequests + counts.newEnquiries + counts.unreadMessages;
 }

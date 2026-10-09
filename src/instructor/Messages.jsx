@@ -18,7 +18,7 @@ import { receivedBookings, slotDay, slotTime, isPast } from "../bookingStore";
 import { unreadByBooking } from "../socialStore";
 import { KIND_LABEL } from "./teachingStore";
 
-export default function Messages() {
+export default function Messages({ onRead }) {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [unread, setUnread] = useState({});
@@ -114,9 +114,17 @@ export default function Messages() {
       {open && (
         <Sheet
           title={`${slotDay(new Date(open.starts_at))}, ${slotTime(new Date(open.starts_at))}`}
-          onClose={() => { setOpen(null); refresh(); }}
+          onClose={() => { setOpen(null); refresh(); onRead?.(); }}
         >
-          <Thread bookingId={open.id} meId={user?.id} onSent={refresh} />
+          {/* Opening a thread marks it read in the database. The tab badge
+              lives a level up, so it is told — otherwise the number sits
+              there until the two-minute poll or a section change. */}
+          <Thread
+            bookingId={open.id}
+            meId={user?.id}
+            onSent={() => { refresh(); onRead?.(); }}
+            onRead={onRead}
+          />
         </Sheet>
       )}
     </>

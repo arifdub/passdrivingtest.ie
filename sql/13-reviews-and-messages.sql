@@ -361,7 +361,13 @@ grant execute on function public.mark_thread_read(uuid) to authenticated;
 -- not have the app open — that needs a service worker, a push subscription
 -- and VAPID keys on a server, none of which exist yet.
 -- ---------------------------------------------------------------------------
-create or replace function public.my_waiting()
+-- Dropped first, not replaced. sql/16 widens this function, so on a re-run
+-- the narrower definition here meets the wider one and Postgres refuses:
+-- OUT parameters are the return type, and `create or replace` may not change
+-- one in either direction. sql/16 widens it again a few hundred lines down.
+drop function if exists public.my_waiting();
+
+create function public.my_waiting()
 returns table (
   booking_requests bigint,
   new_enquiries    bigint,

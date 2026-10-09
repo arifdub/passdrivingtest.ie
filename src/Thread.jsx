@@ -24,7 +24,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Send, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { listMessages, sendMessage, markThreadRead } from "./socialStore";
 
-export default function Thread({ bookingId, meId, closed, onSent }) {
+export default function Thread({ bookingId, meId, closed, onSent, onRead }) {
   const [rows, setRows] = useState([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -35,8 +35,12 @@ export default function Thread({ bookingId, meId, closed, onSent }) {
   const refresh = useCallback(async (markRead = true) => {
     const { rows: r, error: e } = await listMessages(bookingId);
     setRows(r); setError(e); setLoading(false);
-    if (markRead && r.length) await markThreadRead(bookingId);
-  }, [bookingId]);
+    if (markRead && r.length) {
+      await markThreadRead(bookingId);
+      /* Tells whoever is showing an unread count that it just changed. */
+      onRead?.();
+    }
+  }, [bookingId, onRead]);
 
   useEffect(() => { refresh(); }, [refresh]);
 

@@ -9,7 +9,7 @@
 -- so running this when some of it has already been applied is safe. If you
 -- are unsure whether 04 went in, run the lot.
 --
--- This is sql/04 through sql/15 in order. Those files remain the originals;
+-- This is sql/04 through sql/16 in order. Those files remain the originals;
 -- this one is for pasting.
 --
 -- AFTERWARDS — make yourself an admin. There is no client path to it:
@@ -2476,7 +2476,13 @@ grant execute on function public.mark_thread_read(uuid) to authenticated;
 -- not have the app open — that needs a service worker, a push subscription
 -- and VAPID keys on a server, none of which exist yet.
 -- ---------------------------------------------------------------------------
-create or replace function public.my_waiting()
+-- Dropped first, not replaced. sql/16 widens this function, so on a re-run
+-- the narrower definition here meets the wider one and Postgres refuses:
+-- OUT parameters are the return type, and `create or replace` may not change
+-- one in either direction. sql/16 widens it again a few hundred lines down.
+drop function if exists public.my_waiting();
+
+create function public.my_waiting()
 returns table (
   booking_requests bigint,
   new_enquiries    bigint,
@@ -2792,3 +2798,132 @@ end $$;
 -- needs no change. Stated here only because "where is the policy for the
 -- photo" is the obvious question.
 -- ---------------------------------------------------------------------------
+
+-- ###########################################################################
+-- ### 16 — THE BELL CLEARS WHEN YOU READ IT
+-- ###########################################################################
+--
+-- my_waiting() counted outstanding work, so the bell's number could only go
+-- away when the work was done — you read it, closed it, and it still said 3.
+-- "I read it" and "it is done" are different facts. The bell now counts what
+-- has arrived since it was last opened; the tab badges still count what is
+-- outstanding, which is what they are for.
+
+-- ---------------------------------------------------------------------------
+-- 1. When this person last looked
+--
+-- Null means never, which must count everything rather than nothing — a new
+-- instructor with three enquiries waiting should see a 3, not a clean bell.
+-- ---------------------------------------------------------------------------
+alter table public.profiles
+  add column if not exists notifications_seen_at timestamptz;
+
+-- ---------------------------------------------------------------------------
+-- 2. Looking at it
+--
+-- A function rather than a plain update so the client cannot set it to a
+-- time in the future and silence the bell permanently, by accident or
+-- otherwise. now() is the only value it can ever take.
+-- ---------------------------------------------------------------------------
+create or replace function public.mark_notifications_seen()
+returns timestamptz
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_at timestamptz := now();
+begin
+  if auth.uid() is null then
+    raise exception 'not signed in' using errcode = 'insufficient_privilege';
+  end if;
+
+  update public.profiles
+     set notifications_seen_at = v_at
+   where id = auth.uid();
+
+  return v_at;
+end $$;
+
+revoke all on function public.mark_notifications_seen() from public, anon;
+grant execute on function public.mark_notifications_seen() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3. Both numbers, in one call
+--
+-- The four outstanding counts are unchanged — the tab badges and the panel
+-- still read them. `unseen` is the new one, and it is the only thing the
+-- bell shows.
+--
+-- Dropped first: OUT parameters are the return type and `create or replace`
+-- may not change one. Same reason as every other time.
+-- ---------------------------------------------------------------------------
+drop function if exists public.my_waiting();
+
+create function public.my_waiting()
+returns table (
+  booking_requests bigint,
+  new_enquiries    bigint,
+  unread_messages  bigint,
+  lessons_today    bigint,
+  unseen           bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with seen as (
+    -- 'epoch' is 1970, so a person who has never opened the bell counts
+    -- everything. Coalescing to now() would count nothing and hide a
+    -- genuine backlog behind a clean bell.
+    select coalesce(
+      (select notifications_seen_at from public.profiles where id = auth.uid()),
+      'epoch'::timestamptz
+    ) as at
+  )
+  select
+    (select count(*) from public.bookings
+      where instructor_id = auth.uid() and status = 'requested' and starts_at >= now()),
+    (select count(*) from public.instructor_enquiries
+      where instructor_id = auth.uid() and status = 'new'),
+    (select count(*) from public.booking_messages m
+      join public.bookings b on b.id = m.booking_id
+     where auth.uid() in (b.instructor_id, b.learner_id)
+       and m.sender_id <> auth.uid()
+       and m.read_at is null
+       and b.status in ('requested', 'accepted')),
+    (select count(*) from public.lessons
+      where instructor_id = auth.uid()
+        and status = 'scheduled'
+        and starts_at >= date_trunc('day', now() at time zone 'Europe/Dublin') at time zone 'Europe/Dublin'
+        and starts_at <  (date_trunc('day', now() at time zone 'Europe/Dublin') + interval '1 day') at time zone 'Europe/Dublin'),
+
+    -- Arrived since the last look. Counted from created_at, which is already
+    -- there on all three tables, so this cannot disagree with the thing it
+    -- is describing.
+    (
+      (select count(*) from public.bookings cross join seen
+        where instructor_id = auth.uid()
+          and status = 'requested'
+          and created_at > seen.at)
+      +
+      (select count(*) from public.instructor_enquiries cross join seen
+        where instructor_id = auth.uid()
+          and status = 'new'
+          and created_at > seen.at)
+      +
+      (select count(*) from public.booking_messages m
+        join public.bookings b on b.id = m.booking_id
+        cross join seen
+       where auth.uid() in (b.instructor_id, b.learner_id)
+         and m.sender_id <> auth.uid()
+         and m.read_at is null
+         and b.status in ('requested', 'accepted')
+         and m.created_at > seen.at)
+    )
+  where auth.uid() is not null;
+$$;
+
+revoke all on function public.my_waiting() from public, anon;
+grant execute on function public.my_waiting() to authenticated;

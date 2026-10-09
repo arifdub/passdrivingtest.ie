@@ -19,6 +19,8 @@ function slots() {
   return out;
 }
 
+let seen = false;
+
 const server = createServer(async (req, res) => {
   const p = req.url === "/" ? "/index.html" : req.url.split("?")[0];
 
@@ -67,9 +69,13 @@ const server = createServer(async (req, res) => {
     res.setHeader("access-control-allow-headers", "*");
     if (req.method === "OPTIONS") { res.statusCode = 204; return res.end(); }
     if (fn === "open_slots") return res.end(JSON.stringify(slots()));
-    if (fn === "my_waiting") return res.end(JSON.stringify([
-      { booking_requests: 1, new_enquiries: 2, unread_messages: 2, lessons_today: 3 },
-    ]));
+    if (fn === "mark_notifications_seen") { seen = true; return res.end(JSON.stringify(new Date().toISOString())); }
+    if (fn === "my_waiting") return res.end(JSON.stringify([{
+      booking_requests: 1, new_enquiries: 2, unread_messages: 2, lessons_today: 3,
+      /* What the real function does: outstanding work is unchanged by
+         looking, and only `unseen` goes to zero. */
+      unseen: seen ? 0 : 5,
+    }]));
     return res.end(JSON.stringify(null));
   }
 
