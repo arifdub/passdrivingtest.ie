@@ -36,6 +36,11 @@ export default function IncomingBookings({
   onChanged,
   onAccepted,
   onSeeAll,
+  /* Changes when the counts the portal holds change, which is how a
+     booking arriving while this is already on screen gets into the list.
+     Without it this fetched once and then sat there: the footer badge
+     went to 1 and no card appeared under it. */
+  refreshKey,
 }) {
   const { user } = useAuth();
   const [waiting, setWaiting] = useState([]);
@@ -53,7 +58,7 @@ export default function IncomingBookings({
     setWaiting((rows || []).filter(b => b.status === "requested" && !isPast(b)));
     setError(e);
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, refreshKey]);
 
   useEffect(() => { refresh(); }, [refresh]);
 

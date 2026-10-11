@@ -51,6 +51,7 @@ import { receivedEnquiries } from "../marketplace";
 import { receivedBookings, isPast } from "../bookingStore";
 import {
   whatIsWaiting, waitingTotal, outstandingTotal, markNotificationsSeen,
+  countsPulse,
 } from "../socialStore";
 import { subscribeInstructor, describeChange } from "../realtime";
 import Toast from "../Toast";
@@ -330,6 +331,23 @@ export default function InstructorPortal({ onExitRole }) {
                  bell, the tab badge and the icon badge, none of which
                  this screen owns. */
               onChanged={recount}
+              /* And the reverse: when realtime or the poll finds a new
+                 booking, this screen has to re-read its own data.
+
+                 It did not. The tab badge below reads `waiting`, which is
+                 refreshed live; the dashboard's tiles and its list of
+                 requests fetch once on mount and were never told. So a
+                 booking arriving put 1 on the footer badge while the New
+                 Bookings tile beside it still said 0 — two numbers
+                 disagreeing on one screen — and the request card did not
+                 appear until the Bookings tab was opened, which mounts a
+                 fresh component.
+
+                 A string of the numbers rather than the object: the poll
+                 builds a new object every two minutes whether or not
+                 anything changed, and re-fetching on that would be work
+                 nobody asked for. This changes only when a number does. */
+              pulse={countsPulse(waiting)}
             />
           )
           : section === "students" ? (
@@ -453,7 +471,7 @@ function TabBar({ section, onGo, waiting }) {
    --------------------------------------------------------------------------- */
 
 function InstructorDashboard({
-  loading, status, profile, draft, onRegister, onGo, onChanged,
+  loading, status, profile, draft, onRegister, onGo, onChanged, pulse,
 }) {
   const { user } = useAuth();
   const [newEnquiries, setNewEnquiries] = useState(undefined);
@@ -498,7 +516,10 @@ function InstructorDashboard({
     })();
 
     return () => { off = true; };
-  }, [user?.id]);
+    /* `pulse` is what makes this re-read when a booking, enquiry or
+       message arrives. Without it these tiles are a photograph taken when
+       the screen mounted. */
+  }, [user?.id, pulse]);
 
   /* Only worth asking once verified — nobody can find an unlisted instructor
      to enquire with, so the answer is always zero and the failure when
@@ -626,6 +647,7 @@ function InstructorDashboard({
           onSeeAll={() => onGo("bookings")}
           onAccepted={() => onGo("calendar")}
           onChanged={onChanged}
+          refreshKey={pulse}
         />
       </div>
 

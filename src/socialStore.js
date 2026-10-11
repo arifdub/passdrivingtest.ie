@@ -245,3 +245,28 @@ export function outstandingTotal(counts) {
   if (!counts) return 0;
   return counts.bookingRequests + counts.newEnquiries + counts.unreadMessages;
 }
+
+/* What has to change before a screen re-reads its own data.
+
+   The instructor dashboard holds counts and a list of requests that it
+   fetches itself. Those were fetched once on mount and never again, so a
+   booking arriving put 1 on the footer badge — which is refreshed live —
+   while the New Bookings tile beside it still said 0, and the request card
+   did not appear until the Bookings tab was opened.
+
+   Passing the counts object straight down would re-fetch every two
+   minutes, because the poll builds a new object whether or not anything
+   changed. This is a string of the three numbers that mean new work has
+   arrived, so it changes when one of them does and not otherwise.
+
+   Deliberately NOT included: lessonsToday and unseen. The first moves when
+   a lesson is added from this very screen, and the second changes merely
+   because somebody opened the bell — neither means there is new data to
+   go and read. */
+export function countsPulse(counts) {
+  return [
+    counts?.bookingRequests,
+    counts?.newEnquiries,
+    counts?.unreadMessages,
+  ].join("|");
+}
