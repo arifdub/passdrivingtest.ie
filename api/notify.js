@@ -389,6 +389,52 @@ async function compose(kind, id) {
     };
   }
 
+  /* The answer when it is no.
+
+     Harder to write than the yes and more important to send. The learner
+     is holding an email that says the hour is held for them, about an
+     hour that is not. Told promptly they book another slot the same
+     evening; told nothing they assume it is still pending and wait.
+
+     TONE. No apology on the instructor's behalf — we do not know why, and
+     an instructor who is simply booked up has done nothing to be sorry
+     for. It says what happened, repeats the slot so there is no doubt
+     WHICH request this was, passes on their reason if they gave one, and
+     points at the next useful action. */
+  if (kind === "booking_declined") {
+    const { data: b } = await db.from("bookings")
+      .select("id, instructor_id, learner_id, starts_at, duration_minutes, resolution_note, status")
+      .eq("id", id).single();
+    if (!b || b.status !== "declined") return null;
+
+    const instructor = await nameOf(b.instructor_id);
+    return {
+      to: b.learner_id,
+      go: "/app",
+      subject: `Lesson not confirmed - ${when(b.starts_at)}`,
+      push: {
+        title: "Lesson not confirmed",
+        body: `${instructor} could not take ${when(b.starts_at)}`,
+      },
+      html: wrap(
+        "That slot is not available",
+        `<p style="margin:0 0 14px;color:#334155;line-height:1.6">
+           <strong>${esc(instructor)}</strong> could not take your lesson on
+           <strong>${esc(when(b.starts_at))}</strong>. The hour is no longer
+           held, and you have not been charged anything.</p>
+         ${b.resolution_note
+            ? `<p style="margin:0 0 14px;padding:14px;background:#f1f5f9;border-radius:12px;color:#334155;line-height:1.6">
+                 <span style="color:#64748b;font-size:13px">They said:</span><br>${esc(b.resolution_note)}</p>`
+            : ""}
+         <p style="margin:0;color:#334155;line-height:1.6">
+           Their other times are in the app, and there are other instructors
+           in your area. Most learners find another slot the same week.</p>`,
+        "Find another time",
+        { go: "/app", audience: "learner" },
+      ),
+    };
+  }
+
   if (kind === "message") {
     const { data: m } = await db.from("booking_messages")
       .select("id, booking_id, sender_id, body").eq("id", id).single();

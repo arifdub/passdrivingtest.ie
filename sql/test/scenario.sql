@@ -607,6 +607,7 @@ declare
   amy constant text := '22222222-2222-2222-2222-222222222222';
   v_booking uuid;
   v_before  bigint;
+  v_declined uuid;
 begin
   perform set_config('request.jwt.claim.role', 'service_role', false);
 
@@ -722,10 +723,45 @@ begin
   -- accepted a moment ago. This one catches an update that does set the
   -- status, to the value it already held. Verified by removing the
   -- clause and watching this line go red.
+  --
+  -- Its own baseline. This check used to inherit whatever v_before the
+  -- block above it had left behind, which made it pass or fail for
+  -- reasons that had nothing to do with what it claims to test.
+  select count(*) into v_before from net._sent;
   update public.bookings set status = 'accepted' where id = v_booking;
   perform pg_temp.report(
     (select count(*) from net._sent) = v_before,
     'nor does setting accepted on a booking that is already accepted');
+
+  -- ------------------------------------------------------------------
+  -- Declining one: the learner is told that too
+  --
+  -- A no is worse to not hear than a yes. The learner is holding an
+  -- email saying the hour is held for them, about an hour that is not.
+  -- ------------------------------------------------------------------
+  insert into public.bookings (instructor_id, learner_id, starts_at, duration_minutes)
+  values (adi::uuid, '22222222-2222-2222-2222-222222222222',
+          date_trunc('hour', now()) + interval '5 days', 60)
+  returning id into v_declined;
+
+  delete from net._sent;
+  update public.bookings set status = 'declined' where id = v_declined;
+
+  perform pg_temp.report(
+    (select count(*) from net._sent where body->>'kind' = 'booking_declined') = 1,
+    'declining a booking tells the learner');
+
+  perform pg_temp.report(
+    (select count(*) from net._sent) = 1,
+    'and tells nobody else');
+
+  -- Same transition guard as the acceptance.
+  select count(*) into v_before from net._sent;
+  update public.bookings set status = 'declined' where id = v_declined;
+  perform pg_temp.report(
+    (select count(*) from net._sent) = v_before,
+    'declining an already-declined booking sends nothing further');
+
 
   -- And a broken endpoint must not take the write down with it. A different
   -- learner, because one open enquiry per pair is its own rule and tripping
