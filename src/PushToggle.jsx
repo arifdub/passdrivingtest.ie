@@ -64,6 +64,16 @@ export default function PushToggle({ compact }) {
     );
   }
 
+  if (blocked?.code === "badkey") {
+    return (
+      <Wrap compact={compact}>
+        <p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
+          {blocked.text}
+        </p>
+      </Wrap>
+    );
+  }
+
   if (blocked?.code === "unconfigured") {
     return (
       <Wrap compact={compact}>

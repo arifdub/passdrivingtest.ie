@@ -23,16 +23,51 @@
 
 import { supabase, HAS_SUPABASE } from "./supabaseClient";
 
-export const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
+/* TRIMMED. Pasting a key into a hosting dashboard from a text file brings a
+   trailing newline or a stray space more often than not, and an untrimmed
+   key fails inside atob() — which surfaces as "this device wouldn't accept
+   notifications", sending somebody to look at their phone when the problem
+   is a character they cannot see. */
+export const VAPID_PUBLIC_KEY =
+  (import.meta.env.VITE_VAPID_PUBLIC_KEY || "").trim();
 
 /* The browser wants a Uint8Array, and VAPID keys travel as base64url. */
-export function urlBase64ToUint8Array(base64) {
+export function urlBase64ToUint8Array(input) {
+  const base64 = String(input || "").trim();
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const normalised = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(normalised);
   const out = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
+}
+
+/* Is this actually a VAPID public key?
+
+   It is an uncompressed P-256 point: 65 bytes, the first of which is 0x04.
+   The two mistakes that produce a valid-looking string are pasting the
+   PRIVATE key (32 bytes) into the public variable, and pasting one of them
+   with something else attached. Both throw deep inside subscribe() with a
+   message about the device, which is the wrong place to look entirely. */
+export function looksLikeVapidKey(key) {
+  const k = String(key || "").trim();
+  if (!k) return { ok: false, why: "empty" };
+  let bytes;
+  try {
+    bytes = urlBase64ToUint8Array(k);
+  } catch {
+    return { ok: false, why: "not base64url — check for a stray space or line break" };
+  }
+  if (bytes.length === 32) {
+    return { ok: false, why: "that's the PRIVATE key — the public one is longer" };
+  }
+  if (bytes.length !== 65) {
+    return { ok: false, why: `wrong length (${bytes.length} bytes, expected 65)` };
+  }
+  if (bytes[0] !== 4) {
+    return { ok: false, why: "not an uncompressed P-256 point" };
+  }
+  return { ok: true };
 }
 
 /* Running as an installed app rather than in a browser tab. */
@@ -59,12 +94,24 @@ export function pushBlockedReason({
   ios = isIOS(),
   standalone = isStandalone(),
   hasKey = Boolean(VAPID_PUBLIC_KEY),
+  key = VAPID_PUBLIC_KEY,
 } = {}) {
   if (!hasKey) {
     return {
       code: "unconfigured",
       text: "Notifications aren't set up on this site yet.",
     };
+  }
+  /* A key that is present but wrong is a different problem from no key, and
+     it is the site's problem rather than the phone's. */
+  if (key) {
+    const shape = looksLikeVapidKey(key);
+    if (!shape.ok) {
+      return {
+        code: "badkey",
+        text: `The notification key on this site isn't right: ${shape.why}. Check VITE_VAPID_PUBLIC_KEY and redeploy.`,
+      };
+    }
   }
   if (ios && !standalone) {
     /* The important one. On iOS the API is absent in a tab, so without this
@@ -144,14 +191,41 @@ export async function enablePush() {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
     } catch (e) {
-      console.warn("Could not subscribe to push:", e);
-      return { ok: false, error: "This device wouldn't accept notifications." };
+      console.warn("Could not subscribe to push:", e?.name, e?.message, e);
+      return { ok: false, code: "subscribe-failed", error: describeSubscribeError(e) };
     }
   }
 
   const saved = await saveSubscription(sub);
   if (!saved.ok) return saved;
   return { ok: true, error: null };
+}
+
+/* The browser's own reason, in words that point at the right thing.
+
+   The old message was "This device wouldn't accept notifications" for every
+   one of these — which is wrong about three of the four, and sends somebody
+   to their phone's settings when the problem is a deployment. */
+export function describeSubscribeError(e) {
+  const name = e?.name || "";
+  const msg = e?.message || "";
+
+  if (name === "NotAllowedError") {
+    return "Notifications are blocked for this site. Turn them back on in your phone's settings for this app.";
+  }
+  if (name === "InvalidAccessError" || /applicationServerKey|InvalidAccess/i.test(msg)) {
+    return "The notification key on this site isn't right. Check VITE_VAPID_PUBLIC_KEY in Vercel, then redeploy.";
+  }
+  if (name === "AbortError") {
+    /* On iOS this is what a home-screen app that has not actually been
+       re-opened from the icon produces, and also what a device with no
+       network produces. Both are worth naming. */
+    return "Couldn't reach the notification service. Check you're online, and that you opened this from the home-screen icon rather than Safari.";
+  }
+  if (name === "NotSupportedError") {
+    return "This browser can't do notifications.";
+  }
+  return `Couldn't turn them on${name ? ` (${name})` : ""}. ${msg || ""}`.trim();
 }
 
 export async function saveSubscription(sub) {

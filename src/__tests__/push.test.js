@@ -101,3 +101,79 @@ describe("what gets stored", () => {
     expect(row.p_auth).toBe("");
   });
 });
+
+/* ------------------------------------------------------------------------- */
+/* Telling the site's problem from the phone's                                */
+/*                                                                            */
+/* Every one of these used to surface as "this device wouldn't accept         */
+/* notifications", which sends somebody to their phone settings when the      */
+/* problem is a deployment.                                                   */
+/* ------------------------------------------------------------------------- */
+
+import { looksLikeVapidKey, describeSubscribeError } from "../push";
+
+const REAL = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUAM-Ijv1WjZ-sMcBHo";
+
+describe("is this actually a VAPID public key", () => {
+  it("accepts a real one", () => {
+    expect(looksLikeVapidKey(REAL).ok).toBe(true);
+  });
+
+  it("survives the trailing newline a dashboard paste adds", () => {
+    /* The likeliest failure of the lot, and invisible on screen. */
+    expect(looksLikeVapidKey(REAL + "\n").ok).toBe(true);
+    expect(looksLikeVapidKey("  " + REAL + "  ").ok).toBe(true);
+  });
+
+  it("recognises the private key pasted into the public slot", () => {
+    /* 32 bytes rather than 65. The guide says to paste the public key in
+       two places, which is exactly the instruction somebody misreads. */
+    const priv = "pcM9fWMiVEzBqWRuFCGLxuDqPEXoLXBmJq7GdAyFvkA";
+    const r = looksLikeVapidKey(priv);
+    expect(r.ok).toBe(false);
+    expect(r.why).toMatch(/private/i);
+  });
+
+  it("rejects something that is not a key at all", () => {
+    expect(looksLikeVapidKey("hello").ok).toBe(false);
+    expect(looksLikeVapidKey("").why).toBe("empty");
+    expect(looksLikeVapidKey(null).ok).toBe(false);
+  });
+
+  it("is reported as the site's problem, not the device's", () => {
+    const r = pushBlockedReason({
+      supported: true, permission: "default", ios: false, standalone: false,
+      hasKey: true, key: "hello",
+    });
+    expect(r.code).toBe("badkey");
+    expect(r.text).toMatch(/VITE_VAPID_PUBLIC_KEY/);
+    expect(r.text).not.toMatch(/device|phone|browser can't/i);
+  });
+});
+
+describe("what the browser's refusal actually means", () => {
+  it("NotAllowedError points at the phone's settings", () => {
+    expect(describeSubscribeError({ name: "NotAllowedError" }))
+      .toMatch(/settings/i);
+  });
+
+  it("InvalidAccessError points at the deployment", () => {
+    const t = describeSubscribeError({ name: "InvalidAccessError" });
+    expect(t).toMatch(/VITE_VAPID_PUBLIC_KEY/);
+    expect(t).toMatch(/redeploy/i);
+  });
+
+  it("AbortError mentions both the network and the home-screen icon", () => {
+    /* On iOS this is what a site opened in Safari rather than from the
+       installed icon produces, and also what no network produces. */
+    const t = describeSubscribeError({ name: "AbortError" });
+    expect(t).toMatch(/online/i);
+    expect(t).toMatch(/home.screen/i);
+  });
+
+  it("never claims the device refused when it did not say so", () => {
+    const t = describeSubscribeError({ name: "WeirdError", message: "something odd" });
+    expect(t).toMatch(/something odd/);
+    expect(t).not.toMatch(/wouldn't accept/i);
+  });
+});
