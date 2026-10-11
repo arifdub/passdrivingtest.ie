@@ -201,6 +201,33 @@ export function TestResult({ test }) {
     );
   }
 
+  /* First, and before anything else it might say.
+
+     A mismatch between the browser's key and the server's explains every
+     other symptom in this panel — the refusals, the silence, the devices
+     that register happily and then never ring. Reporting "sent to 2
+     devices" above it would be true and useless. */
+  if (test.keyHint) {
+    return (
+      <div className="mt-2 text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
+        <p className="font-semibold">The two notification keys do not match.</p>
+        <p className="mt-0.5">
+          This device subscribed with a key starting{" "}
+          <code className="font-mono">{test.keyHint.mine || "(none)"}</code>, but the
+          server signs with{" "}
+          <code className="font-mono">{test.keyHint.theirs || "(none)"}</code>.
+          Every push is refused.
+        </p>
+        <p className="mt-0.5">
+          In Vercel, set <code className="font-mono">VITE_VAPID_PUBLIC_KEY</code> and{" "}
+          <code className="font-mono">VAPID_PUBLIC_KEY</code> to the same value,
+          redeploy, then turn notifications off and on again here to re-register
+          this device.
+        </p>
+      </div>
+    );
+  }
+
   if (test.why) {
     return (
       <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 leading-relaxed">

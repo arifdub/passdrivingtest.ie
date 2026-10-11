@@ -314,5 +314,25 @@ export async function sendTestPush() {
   if (!res.ok) {
     return { ok: false, error: body?.error || `Server said ${res.status}.` };
   }
-  return { ok: true, ...body };
+
+  /* The one comparison neither of us can make by eye.
+
+     The key the browser subscribes with and the key the server signs with
+     live in two separate Vercel variables, edited at different times. When
+     they drift, a device is registered against one and every push is
+     signed with the other, and the push service refuses it. Both values
+     are public — this one is already in the bundle you are running — so
+     comparing them here costs nothing and settles it outright. */
+  const mine = VAPID_PUBLIC_KEY;
+  const theirs = (body?.serverKey || "").trim();
+  const keysAgree = Boolean(mine && theirs && mine === theirs);
+
+  return {
+    ok: true,
+    ...body,
+    keysAgree,
+    /* Only ever the first few characters, and only of public keys: enough
+       to show they differ without filling a phone screen. */
+    keyHint: keysAgree ? null : { mine: mine.slice(0, 10), theirs: theirs.slice(0, 10) },
+  };
 }

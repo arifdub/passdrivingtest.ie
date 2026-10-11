@@ -25,6 +25,36 @@ const html = (test) =>
   renderToString(<TestResult test={test} />).replace(/<!-- -->/g, "");
 
 describe("the result of a test notification", () => {
+  it("leads with a key mismatch, ahead of anything else it could say", () => {
+    /* The case that explains all the others. Reported underneath a
+       successful-looking count, it would be read as a footnote. */
+    const out = html({
+      ok: true, devices: 2, sent: 2,
+      keysAgree: false,
+      keyHint: { mine: "BJa1b2c3d4", theirs: "BKz9y8x7w6" },
+    });
+    expect(out).toContain("do not match");
+    expect(out).toContain("BJa1b2c3d4");
+    expect(out).toContain("BKz9y8x7w6");
+    expect(out).toContain("VITE_VAPID_PUBLIC_KEY");
+    expect(out).not.toContain("Sent to 2 devices");
+  });
+
+  it("names a missing key on either side rather than printing nothing", () => {
+    const out = html({
+      ok: true, devices: 0, sent: 0,
+      keysAgree: false,
+      keyHint: { mine: "", theirs: "BKz9y8x7w6" },
+    });
+    expect(out).toContain("(none)");
+  });
+
+  it("says nothing about keys when they agree", () => {
+    const out = html({ ok: true, devices: 2, sent: 2, keysAgree: true, keyHint: null });
+    expect(out).not.toContain("do not match");
+    expect(out).toContain("Sent to 2 devices");
+  });
+
   it("shows the server's own reason when it could not send", () => {
     const out = html({ ok: true, sent: 0, devices: 2, why: "VAPID config rejected: bad key" });
     expect(out).toContain("VAPID config rejected");

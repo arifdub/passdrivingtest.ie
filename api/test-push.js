@@ -84,11 +84,24 @@ export default async function handler(req, res) {
   const userId = who?.user?.id;
   if (whoErr || !userId) return res.status(401).json({ error: "sign in first" });
 
+  /* The server's own public key, returned in full and deliberately.
+
+     It is not a secret: it is compiled into the JavaScript every visitor
+     downloads, because the browser needs it to subscribe. What makes it
+     worth returning is that there are TWO copies of it in the
+     configuration — VAPID_PUBLIC_KEY here, VITE_VAPID_PUBLIC_KEY in the
+     bundle — and they are edited separately, so they drift. When they
+     differ, every device subscribed with one key and every push is signed
+     with the other, and Apple answers 403 VapidPkHashMismatch. The caller
+     compares the two and says so in plain words. The PRIVATE key is never
+     returned, named, or hinted at. */
+  const serverKey = (VAPID_PUBLIC_KEY || "").trim();
+
   const state = ensurePush();
   if (!state.ready) {
     /* The single most common cause, and previously invisible: a public key
        that is not a VAPID key, or a subject without its mailto: prefix. */
-    return res.status(200).json({ sent: 0, devices: 0, why: state.why });
+    return res.status(200).json({ sent: 0, devices: 0, serverKey, why: state.why });
   }
 
   const { data: subs, error: subsErr } = await db
@@ -101,6 +114,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       sent: 0,
       devices: 0,
+      serverKey,
       why: "This account has no registered devices. Turn notifications on first.",
     });
   }
@@ -143,6 +157,7 @@ export default async function handler(req, res) {
     devices: subs.length,
     sent,
     expired: dead.length,
+    serverKey,
     ...(failed.length ? { failed } : {}),
   });
 }
