@@ -344,6 +344,51 @@ async function compose(kind, id) {
     };
   }
 
+  /* The confirmation sql/23's email promised.
+
+     Same details as the request, deliberately: a learner should not have
+     to find the earlier email to know where they are being collected.
+     This is the one they will keep. */
+  if (kind === "booking_accepted") {
+    const { data: b } = await db.from("bookings")
+      .select("id, instructor_id, learner_id, starts_at, duration_minutes, price_cents, pickup, note, status")
+      .eq("id", id).single();
+    /* The trigger fires on the transition, but a row can change again
+       between the trigger and this call — declined, cancelled — and a
+       confirmation for a lesson that is no longer on is worse than none. */
+    if (!b || b.status !== "accepted") return null;
+
+    const instructor = await nameOf(b.instructor_id);
+    return {
+      to: b.learner_id,
+      go: "/app",
+      subject: `Lesson confirmed - ${when(b.starts_at)}`,
+      push: {
+        title: "Lesson confirmed",
+        body: `${instructor} - ${when(b.starts_at)}`,
+      },
+      html: wrap(
+        "Your lesson is confirmed",
+        `<p style="margin:0 0 14px;color:#334155;line-height:1.6">
+           <strong>${esc(instructor)}</strong> has confirmed your lesson.
+           It is in your diary now — here are the details.</p>
+         ${detailTable([
+           ["Instructor", instructor],
+           ["When", when(b.starts_at)],
+           ["How long", `${b.duration_minutes || 60} minutes`],
+           b.pickup ? ["Pick-up", b.pickup] : null,
+           b.price_cents ? ["Price", euro(b.price_cents)] : null,
+           b.note ? ["Your note", b.note] : null,
+         ])}
+         <p style="margin:14px 0 0;color:#64748b;font-size:14px">
+           You pay your instructor directly. If you need to change or cancel,
+           message them in the app as early as you can.</p>`,
+        "See it in the app",
+        { go: "/app", audience: "learner" },
+      ),
+    };
+  }
+
   if (kind === "message") {
     const { data: m } = await db.from("booking_messages")
       .select("id, booking_id, sender_id, body").eq("id", id).single();

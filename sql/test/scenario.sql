@@ -686,13 +686,46 @@ begin
         and column_name in ('status_code', 'error_msg', 'timed_out')) = 3,
     'notify_log shows error_msg, not just a status code that may be null');
 
-  -- An accepted booking must NOT email: the instructor did that themselves.
-  select id into v_booking from public.bookings where status = 'accepted' limit 1;
+  -- ------------------------------------------------------------------
+  -- Accepting one: the learner is told, the instructor is not
+  --
+  -- The instructor tapped accept; emailing them about their own tap is
+  -- the kind of notification people filter away, taking the ones that
+  -- matter with it. The learner, who has been waiting on an answer, is
+  -- the whole point.
+  -- ------------------------------------------------------------------
+  select id into v_booking from public.bookings where status = 'requested' limit 1;
+  delete from net._sent;
+  update public.bookings set status = 'accepted' where id = v_booking;
+
+  perform pg_temp.report(
+    (select count(*) from net._sent where body->>'kind' = 'booking_accepted') = 1,
+    'accepting a booking confirms it to the learner');
+
+  perform pg_temp.report(
+    (select count(*) from net._sent where body->>'kind' = 'booking') = 0,
+    'and does not email the instructor about their own tap');
+
+  -- Two separate guards, checked separately because they protect
+  -- against different things and either could be removed alone.
+  --
+  -- First: `after update OF STATUS`, which means an update that does not
+  -- touch the status column never reaches the trigger at all. Correcting
+  -- a pick-up on an accepted booking is not a confirmation.
   select count(*) into v_before from net._sent;
+  update public.bookings set pickup = 'Somewhere else' where id = v_booking;
+  perform pg_temp.report(
+    (select count(*) from net._sent) = v_before,
+    'editing an already-accepted booking does not confirm it again');
+
+  -- Second: the WHEN clause, which requires the row NOT to have been
+  -- accepted a moment ago. This one catches an update that does set the
+  -- status, to the value it already held. Verified by removing the
+  -- clause and watching this line go red.
   update public.bookings set status = 'accepted' where id = v_booking;
   perform pg_temp.report(
     (select count(*) from net._sent) = v_before,
-    'accepting a booking emails nobody');
+    'nor does setting accepted on a booking that is already accepted');
 
   -- And a broken endpoint must not take the write down with it. A different
   -- learner, because one open enquiry per pair is its own rule and tripping
