@@ -960,3 +960,107 @@ begin
 
   update public.notify_config set enabled = false;
 end $outer$;
+
+-- --------------------------------------------------------------------------
+-- Deleting an account actually removes what the privacy policy says it
+-- removes — and nothing it does not say
+--
+-- Account deletion (api/delete-account.js) does not delete rows itself: it
+-- calls Supabase's admin API to remove the auth.users row, and everything
+-- else disappears as a consequence of `on delete cascade` already declared
+-- throughout sql/04 onward. That makes this test a check on the SCHEMA,
+-- not on the endpoint — but it is the schema that the privacy policy's
+-- retention section describes, word for word, so this is where a drift
+-- between what is promised and what the database actually does would be
+-- caught.
+--
+-- A real DELETE on auth.users, the same statement the admin API issues
+-- under the hood, with two fresh accounts that touch nothing used
+-- elsewhere in this file and are never referenced again after this block.
+-- --------------------------------------------------------------------------
+do $outer$
+declare
+  dee constant uuid := '66666666-6666-6666-6666-666666666666';   -- instructor
+  fay constant uuid := '77777777-7777-7777-7777-777777777777';   -- learner
+  v_booking uuid;
+begin
+  perform set_config('request.jwt.claim.role', 'service_role', false);
+
+  insert into auth.users (id, email, raw_user_meta_data) values
+    (dee, 'dee@example.com', '{"role":"instructor"}'),
+    (fay, 'fay@example.com', '{"role":"student"}')
+  on conflict do nothing;
+  insert into public.profiles (id) select id from auth.users where id in (dee, fay)
+  on conflict do nothing;
+
+  insert into public.instructor_profiles
+    (user_id, full_name, adi_number, verification_status, listed, hourly_rate_cents,
+     counties, lesson_types, transmissions)
+  values (dee, 'Dee Quinn', '55221', 'verified', true, 4000,
+          array['Cork'], array['lesson'], array['manual']);
+
+  -- sql/14 gives every verified instructor a booking-rules row
+  -- automatically the moment they are marked verified, so the row
+  -- inserted above for 'dee' already exists by the time this runs.
+  -- Upserted, like the file's own top-of-file fixture does, rather than
+  -- inserted — a plain insert collides with that trigger's own row.
+  insert into public.instructor_booking_rules
+    (instructor_id, min_notice_hours, max_days_ahead, lesson_minutes, travel_buffer_minutes)
+  values (dee, 2, 30, 60, 15)
+  on conflict (instructor_id) do update
+    set min_notice_hours=2, max_days_ahead=30, lesson_minutes=60,
+        travel_buffer_minutes=15, accepting=true;
+
+  insert into public.bookings (instructor_id, learner_id, starts_at, duration_minutes, status)
+  values (dee, fay, date_trunc('hour', now()) + interval '6 days', 60, 'accepted')
+  returning id into v_booking;
+
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth)
+  values (fay, 'https://push.example.com/fay-device', 'k1', 'k2');
+
+  -- Everything is really there before the deletion, or the assertions
+  -- after it would be proving nothing.
+  perform pg_temp.report(
+    (select count(*) from public.bookings where id = v_booking) = 1,
+    'setup: the booking exists before either account is deleted');
+
+  -- The instructor deletes their account. db.auth.admin.deleteUser issues
+  -- exactly this statement.
+  delete from auth.users where id = dee;
+
+  perform pg_temp.report(
+    (select count(*) from public.profiles where id = dee) = 0,
+    'deleting the instructor removes their profile');
+  perform pg_temp.report(
+    (select count(*) from public.instructor_profiles where user_id = dee) = 0,
+    'and their instructor profile');
+  perform pg_temp.report(
+    (select count(*) from public.instructor_booking_rules where instructor_id = dee) = 0,
+    'and their booking rules');
+
+  -- The consequence the privacy policy's warning box names explicitly:
+  -- the booking is gone too, not just the instructor's side of it. Fay
+  -- made no request to delete anything, and her record of this lesson is
+  -- gone along with it.
+  perform pg_temp.report(
+    (select count(*) from public.bookings where id = v_booking) = 0,
+    'and the booking shared with the learner — her record of it too, not just his');
+
+  -- The learner is untouched by the instructor's deletion.
+  perform pg_temp.report(
+    (select count(*) from public.profiles where id = fay) = 1,
+    'the learner''s own account is unaffected by the instructor deleting theirs');
+  perform pg_temp.report(
+    (select count(*) from public.push_subscriptions where user_id = fay) = 1,
+    'and her registered device is still there');
+
+  -- Now the learner deletes her own account.
+  delete from auth.users where id = fay;
+
+  perform pg_temp.report(
+    (select count(*) from public.profiles where id = fay) = 0,
+    'deleting the learner removes her profile');
+  perform pg_temp.report(
+    (select count(*) from public.push_subscriptions where user_id = fay) = 0,
+    'and her registered device');
+end $outer$;

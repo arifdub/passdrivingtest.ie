@@ -60,5 +60,21 @@ for (const m of ["manifest.json", "manifest-adi.json", "manifest-admin.json"]) {
   }
 }
 
+/* The privacy policy. Linked from both account screens, but as a plain
+   <a href> inside React — nothing in the static HTML names it, so the
+   only place to check for it is the built JS bundle itself, and the
+   page it points at has to actually exist in dist/. A typo'd path here
+   is invisible until someone clicks it. */
+is("privacy.html is in the build", existsSync(join(DIST, "privacy.html")));
+{
+  const { readdirSync } = await import("node:fs");
+  const assetsDir = join(DIST, "assets");
+  const bundled = existsSync(assetsDir)
+    ? readdirSync(assetsDir).filter(f => f.endsWith(".js"))
+      .some(f => readFileSync(join(assetsDir, f), "utf8").includes("/privacy.html"))
+    : false;
+  is("the built app links to /privacy.html somewhere", bundled);
+}
+
 console.log(bad ? `\n${bad} missing` : "\nevery referenced icon is in the build");
 process.exit(bad ? 1 : 0);

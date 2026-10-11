@@ -28,6 +28,7 @@ import AvatarPicker from "../AvatarPicker";
 import PushToggle from "../PushToggle";
 import { useTheme } from "../theme";
 import { setInstructorPhoto } from "../avatars";
+import DeleteAccountCard from "../DeleteAccountCard";
 import { PrimaryButton, SecondaryButton, VerifiedBadge } from "../ui";
 import { TRANSMISSIONS, LESSON_TYPES } from "./instructorStore";
 
@@ -41,7 +42,7 @@ function euro(cents) {
 
 export default function Account({ loading, status, profile, draft, onRegister, onChanged }) {
   const { isDark, setTheme } = useTheme();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const p = profile || draft;
 
   if (loading) {
@@ -203,6 +204,21 @@ export default function Account({ loading, status, profile, draft, onRegister, o
           <Unfinished status={status} profile={profile} draft={draft} onRegister={onRegister} />
         </div>
       )}
+
+      {/* Same component the learner's Settings screen uses (see
+          src/DeleteAccountCard.jsx for why this is shared rather than
+          written twice) — wrapped here to match this file's own card
+          style rather than screens.jsx's SettingsGroup, which this
+          screen does not otherwise use. */}
+      <div className="mt-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <DeleteAccountCard role="instructor" onDeleted={signOut} />
+      </div>
+
+      <p className="mt-4 text-center text-xs">
+        <a href="/privacy.html" className="text-slate-400 underline underline-offset-2">
+          Privacy policy
+        </a>
+      </p>
     </>
   );
 }

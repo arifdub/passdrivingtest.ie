@@ -38,6 +38,7 @@ import {
 import { useTextSize } from "./textSize";
 import AvatarPicker from "./AvatarPicker";
 import { setLearnerPhoto } from "./avatars";
+import DeleteAccountCard from "./DeleteAccountCard";
 
 const SECTION_ICON = {
   "dtt.sec.rules": ClipboardCheck,
@@ -1381,9 +1382,24 @@ export function ProfileScreen({ theme, toggleTheme }) {
           </div>
         )}
 
+        {/* A guest has no account to delete — there is nothing here but a
+            device's local progress, and "Reset my progress" above already
+            covers that. */}
+        {!isGuest && (
+          <SettingsGroup title="Account">
+            <DeleteAccountCard role="learner" onDeleted={signOut} />
+          </SettingsGroup>
+        )}
+
         <p className="mt-6 text-center text-xs text-slate-400">
           {overall.answered} of {overall.total} questions answered
           {mode === "local" && " · saved on this device only"}
+        </p>
+
+        <p className="mt-3 text-center text-xs">
+          <a href="/privacy.html" className="text-slate-400 underline underline-offset-2">
+            Privacy policy
+          </a>
         </p>
       </Screen>
     </>
