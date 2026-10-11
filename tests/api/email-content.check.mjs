@@ -72,6 +72,24 @@ is("a label is escaped too", !injectedLabel.includes("<b>Label"));
 is("the title is escaped",
   wrap('<img src=x onerror=1>', "<p>b</p>", "c").includes("&lt;img"));
 
+/* ---- a third audience: the developer, not an account on the platform - */
+
+/* Added alongside new_user and instructor_submitted. Before these, every
+   email was either to an instructor or to a learner, and wrap() only knew
+   those two words. The quick way to add an admin alert would have been to
+   call it "learner" and let the footer lie — "you're getting this because
+   you booked a lesson" — which is exactly the kind of wrong word choice a
+   reader stops trusting the whole email over. */
+const toAdmin = wrap("Title", "<p>body</p>", "Open the admin portal",
+  { go: "/admin", audience: "admin" });
+is("the admin frame does not claim a lesson was booked",
+  !toAdmin.includes("booked a lesson"));
+is("does not claim the reader is an instructor",
+  !toAdmin.includes("you're an instructor"));
+is("says why it was sent, and how to redirect it",
+  toAdmin.includes("ADMIN_NOTIFY_EMAIL"));
+is("links to the admin portal", toAdmin.includes('href="https://passdrivingtest.ie/admin"'));
+
 /* ---- money ----------------------------------------------------------- */
 
 is("cents become euro", euro(4500) === "€45.00", euro(4500));

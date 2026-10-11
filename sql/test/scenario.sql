@@ -605,9 +605,11 @@ do $outer$
 declare
   adi constant text := '11111111-1111-1111-1111-111111111111';
   amy constant text := '22222222-2222-2222-2222-222222222222';
+  cian constant text := '55555555-5555-5555-5555-555555555555';
   v_booking uuid;
   v_before  bigint;
   v_declined uuid;
+  v_instr_app uuid;
 begin
   perform set_config('request.jwt.claim.role', 'service_role', false);
 
@@ -762,6 +764,68 @@ begin
     (select count(*) from net._sent) = v_before,
     'declining an already-declined booking sends nothing further');
 
+
+  -- ------------------------------------------------------------------
+  -- A new account tells the developer
+  --
+  -- The whole "cast" at the top of this file was inserted before
+  -- notify_config was enabled, so none of those rows should have queued
+  -- anything — only a profiles row created from here on should.
+  -- ------------------------------------------------------------------
+  delete from net._sent;
+  insert into auth.users (id, email, raw_user_meta_data) values
+    (cian::uuid, 'cian@example.com', '{"role":"instructor"}')
+  on conflict do nothing;
+  insert into public.profiles (id)
+    select id from auth.users where id = cian::uuid
+  on conflict do nothing;
+
+  perform pg_temp.report(
+    (select count(*) from net._sent
+      where body->>'kind' = 'new_user' and body->>'id' = cian) = 1,
+    'a new account queues exactly one admin alert');
+
+  -- And the cast at the top of the file, set up before notify_config was
+  -- enabled, must not have left anything queued behind it either — this
+  -- is the only honest way to prove that silence, since nothing else in
+  -- this file has looked at net._sent for 'new_user' until now.
+  perform pg_temp.report(
+    (select count(*) from net._sent where body->>'kind' = 'new_user') = 1,
+    'and nobody from the earlier setup queued one retroactively');
+
+  -- ------------------------------------------------------------------
+  -- An instructor submitting for review tells the developer too
+  -- ------------------------------------------------------------------
+  delete from net._sent;
+  insert into public.instructor_profiles
+    (user_id, full_name, adi_number, verification_status)
+  values (cian::uuid, 'Cian Walsh', '99887', 'draft')
+  returning id into v_instr_app;
+
+  perform pg_temp.report(
+    (select count(*) from net._sent) = 0,
+    'starting a draft application queues nothing — there is nothing to approve yet');
+
+  update public.instructor_profiles
+     set verification_status = 'pending'
+   where id = v_instr_app;
+
+  perform pg_temp.report(
+    (select count(*) from net._sent
+      where body->>'kind' = 'instructor_submitted' and body->>'id' = v_instr_app::text) = 1,
+    'submitting for review queues exactly one admin alert');
+
+  -- Same transition guard as sql/24 and sql/25: an edit that touches the
+  -- column but leaves its value unchanged must not count as a second
+  -- submission. Verified by removing the WHEN clause's second half earlier
+  -- in this session's work on sql/24 — the same shape, not re-proven here.
+  select count(*) into v_before from net._sent;
+  update public.instructor_profiles
+     set verification_status = 'pending'
+   where id = v_instr_app;
+  perform pg_temp.report(
+    (select count(*) from net._sent) = v_before,
+    'resetting pending to pending does not queue a second alert');
 
   -- And a broken endpoint must not take the write down with it. A different
   -- learner, because one open enquiry per pair is its own rule and tripping

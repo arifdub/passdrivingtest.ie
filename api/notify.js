@@ -60,6 +60,16 @@
     VAPID_PRIVATE_KEY            never in the browser
     VAPID_SUBJECT                mailto:you@yourdomain.ie
     NOTIFY_SITE                  https://passdrivingtest.ie
+
+    ADMIN_NOTIFY_EMAIL           where "a new account exists" and "an
+                                  instructor wants approval" are sent.
+                                  Defaults to arifdub@gmail.com so this
+                                  works with no extra Vercel configuration;
+                                  change the variable and redeploy to send
+                                  it elsewhere — a saved environment
+                                  variable does not reach an already-
+                                  running function, same as every other
+                                  one on this list.
   ===========================================================================
 */
 
@@ -87,6 +97,7 @@ const {
   VAPID_PRIVATE_KEY,
   VAPID_SUBJECT = "mailto:hello@passdrivingtest.ie",
   NOTIFY_SITE = "https://passdrivingtest.ie",
+  ADMIN_NOTIFY_EMAIL = "arifdub@gmail.com",
 } = process.env;
 
 const db = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
@@ -221,14 +232,30 @@ export function detailTable(rows) {
   return `<table role="presentation" width="100%" style="background:#f8fafc;border-radius:12px;border-collapse:separate;border-spacing:0">${cells}</table>`;
 }
 
+/* Three audiences, not two.
+
+   "learner" was added for sql/23 under the assumption that anyone who
+   wasn't an instructor must be a learner — true until the admin alerts
+   below, which go to neither. Reusing "learner" for those would have told
+   the developer they were "getting this because you booked a lesson",
+   which is wrong in a way that undermines every other sentence in the
+   email. A third branch, rather than a guess dressed up as one of the
+   other two. */
 export function wrap(title, body, cta, { go = "/adi", audience = "instructor" } = {}) {
-  const learner = audience === "learner";
+  const kicker = { instructor: "Instructor portal", learner: "Driving lessons", admin: "Admin alert" }[audience]
+    || "Instructor portal";
+  const footer = {
+    learner: "You're getting this because you booked a lesson through PassDrivingTest.ie. Turn these off under Account in the app.",
+    admin: "You're getting this because you're set as the admin contact for PassDrivingTest.ie. Change ADMIN_NOTIFY_EMAIL in Vercel to send it elsewhere.",
+  }[audience]
+    || "You're getting this because you're an instructor on PassDrivingTest.ie. Turn these off under Account in the portal.";
+
   return `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
     <table role="presentation" width="100%" style="max-width:520px;background:#fff;border-radius:16px;overflow:hidden">
       <tr><td style="background:#0f172a;padding:20px 24px">
         <div style="color:#fff;font-weight:800;font-size:17px">PassDrivingTest.ie</div>
-        <div style="color:#94a3b8;font-size:13px">${learner ? "Driving lessons" : "Instructor portal"}</div>
+        <div style="color:#94a3b8;font-size:13px">${kicker}</div>
       </td></tr>
       <tr><td style="padding:24px">
         <h1 style="margin:0 0 12px;font-size:19px;color:#0f172a">${esc(title)}</h1>
@@ -236,9 +263,7 @@ export function wrap(title, body, cta, { go = "/adi", audience = "instructor" } 
         <a href="${NOTIFY_SITE}${go}" style="display:inline-block;margin-top:20px;background:#10b981;color:#0f172a;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:12px">${esc(cta)}</a>
       </td></tr>
       <tr><td style="padding:16px 24px;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5">
-        ${learner
-          ? "You're getting this because you booked a lesson through PassDrivingTest.ie. Turn these off under Account in the app."
-          : "You're getting this because you're an instructor on PassDrivingTest.ie. Turn these off under Account in the portal."}
+        ${footer}
       </td></tr>
     </table>
   </td></tr></table></body></html>`;
@@ -484,6 +509,94 @@ async function compose(kind, id) {
     };
   }
 
+  /* Told to the developer, not to any account on the platform.
+
+     Both of these set `to: undefined` and `toEmail: ADMIN_NOTIFY_EMAIL`
+     instead. `to` is a user id everywhere else in this file — it is how
+     sendPush finds a device and how sendEmail finds an address — and an
+     admin alert has neither a device nor a profiles row of its own to
+     look up. sendEmail and sendPush both check for toEmail/a missing `to`
+     before doing anything that would query a uuid column with one, which
+     is what stops this being a confusing 500 instead of a quiet no-op. */
+
+  if (kind === "new_user") {
+    const { data: p } = await db.from("profiles")
+      .select("id, role, full_name, created_at").eq("id", id).maybeSingle();
+    if (!p) return null;
+
+    const { data } = await db.auth.admin.getUserById(id);
+    const email = data?.user?.email || "(no email on the account)";
+    const who = p.full_name || email;
+    const role = p.role === "instructor" ? "instructor" : "learner";
+
+    return {
+      to: undefined,
+      toEmail: ADMIN_NOTIFY_EMAIL,
+      go: "/admin",
+      subject: `New ${role} account — ${who}`,
+      push: { title: "New account", body: `${who} (${role})` },
+      html: wrap(
+        `A new ${role} signed up`,
+        `${detailTable([
+          ["Name", p.full_name || "(not given yet)"],
+          ["Email", email],
+          ["Role", role],
+          ["Signed up", when(p.created_at)],
+        ])}`,
+        "Open the admin portal",
+        { go: "/admin", audience: "admin" },
+      ),
+    };
+  }
+
+  if (kind === "instructor_submitted") {
+    const { data: i } = await db.from("instructor_profiles")
+      .select(`
+        id, user_id, full_name, phone, adi_number, adi_category,
+        years_experience, lesson_types, counties, service_areas,
+        hourly_rate_cents, verification_status
+      `)
+      .eq("id", id).single();
+    /* A race against the admin, same guard as every other compose branch:
+       between the trigger firing and this call, the row may already have
+       moved on (an admin who was mid-review when it landed, or a second
+       submission queued behind the first). Nothing to tell anyone in
+       that case — the row no longer says what the trigger thought it did. */
+    if (!i || i.verification_status !== "pending") return null;
+
+    const { data } = await db.auth.admin.getUserById(i.user_id);
+    const email = data?.user?.email || "(no email on the account)";
+    const who = i.full_name || email;
+    const areas = [...(i.counties || []), ...(i.service_areas || [])];
+
+    return {
+      to: undefined,
+      toEmail: ADMIN_NOTIFY_EMAIL,
+      go: "/admin",
+      subject: `New instructor awaiting approval — ${who}`,
+      push: { title: "Instructor awaiting approval", body: who },
+      html: wrap(
+        "An instructor submitted for review",
+        `${detailTable([
+          ["Name", i.full_name || "(not given)"],
+          ["Email", email],
+          ["Phone", i.phone || "(not given)"],
+          ["ADI number", i.adi_number || "(not given)"],
+          i.adi_category ? ["Category", i.adi_category] : null,
+          i.years_experience != null ? ["Experience", `${i.years_experience} years`] : null,
+          i.lesson_types?.length ? ["Teaches", i.lesson_types.join(", ")] : null,
+          areas.length ? ["Areas", areas.join(", ")] : null,
+          i.hourly_rate_cents ? ["Rate", euro(i.hourly_rate_cents)] : null,
+        ])}
+         <p style="margin:14px 0 0;color:#64748b;font-size:14px">
+           Check the ADI number against the RSA register, then approve or
+           decline from Instructors in the admin portal.</p>`,
+        "Review in the admin portal",
+        { go: "/admin", audience: "admin" },
+      ),
+    };
+  }
+
   return null;
 }
 
@@ -507,15 +620,24 @@ export function smtpFailureReason(e) {
 async function sendEmail(userId, mail) {
   if (!smtpReady && !RESEND_API_KEY) return { sent: false, why: "no SMTP and no RESEND_API_KEY" };
 
-  const { data: p } = await db.from("profiles")
-    .select("email_notifications").eq("id", userId).maybeSingle();
-  /* Absent means the column or row is new: send. Somebody who has never seen
-     the setting still wants to know a learner booked them. */
-  if (p?.email_notifications === false) return { sent: false, why: "opted out" };
+  /* An admin alert (new_user, instructor_submitted) carries its address
+     directly — mail.toEmail — because there is no account, and so no
+     profiles row and no auth.users row, to look either up from. Taking
+     this branch before the two queries below matters: userId is
+     undefined for these, and `.eq("id", undefined)` against a uuid
+     column is a database error, not an empty result. */
+  let to = mail.toEmail;
+  if (!to) {
+    const { data: p } = await db.from("profiles")
+      .select("email_notifications").eq("id", userId).maybeSingle();
+    /* Absent means the column or row is new: send. Somebody who has never
+       seen the setting still wants to know a learner booked them. */
+    if (p?.email_notifications === false) return { sent: false, why: "opted out" };
 
-  const { data } = await db.auth.admin.getUserById(userId);
-  const to = data?.user?.email;
-  if (!to) return { sent: false, why: "no address" };
+    const { data } = await db.auth.admin.getUserById(userId);
+    to = data?.user?.email;
+    if (!to) return { sent: false, why: "no address" };
+  }
 
   /* Your own server first. See the note at the top: the domain's sending
      reputation is already built on it. */
@@ -576,6 +698,11 @@ export function hostOf(endpoint) {
 }
 
 async function sendPush(userId, mail) {
+  /* An admin alert has no account and so no device to push to — see the
+     matching guard in sendEmail. Checked first, before anything that
+     would query a uuid column with undefined. */
+  if (!userId) return { sent: 0, why: "no device recipient (admin notification)" };
+
   const state = ensurePush();
   if (!state.ready) return { sent: 0, why: state.why };
 
