@@ -1,0 +1,8 @@
+# Vercel turns every .js and .mjs file under api/ into a public endpoint.
+# Nothing else in the repo should ever end up there, but this is the belt to
+# that brace: two test files briefly lived in api/, and one of them starts an
+# SMTP server and sends mail. As public URLs that would have been genuinely
+# bad, and nothing in the build would have complained.
+tests/
+_preview/
+sql/

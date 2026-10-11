@@ -3,7 +3,7 @@
    that is reachable from the internet. */
 process.env.NOTIFY_SECRET = "s3cret";
 
-const { default: handler } = await import("./notify.js");
+const { default: handler } = await import("../../api/notify.js");
 
 const call = async (method, headers, body) => {
   let code = 0, payload = null;

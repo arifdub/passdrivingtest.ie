@@ -62,7 +62,7 @@ process.env.NOTIFY_SITE = "https://passdrivingtest.ie";
    testing is how api/notify.js decides between implicit TLS and STARTTLS
    from the port number, which is the single most common SMTP
    misconfiguration and presents as a hang rather than an error. */
-const { mailer } = await import("./notify.js");
+const { mailer } = await import("../../api/notify.js");
 const transport = mailer();
 
 let bad = 0;
@@ -87,7 +87,7 @@ is("the HTML is in there", /Amy has requested/.test(raw.replace(/=\r?\n/g, "")))
 
 /* Wrong password must fail fast and loudly, not hang. */
 process.env.SMTP_PASS = "wrong";
-const { mailer: remailer } = await import("./notify.js?bust=" + Date.now());
+const { mailer: remailer } = await import("../../api/notify.js?bust=" + Date.now());
 const wrong = remailer();
 let refused = false;
 const started = Date.now();
@@ -100,10 +100,10 @@ is("and refused quickly, not by timing out", Date.now() - started < 8000);
    upgrade. Getting it backwards hangs rather than erroring, so the choice
    is asserted directly. */
 process.env.SMTP_PORT = "465";
-const { mailer: m465 } = await import("./notify.js?p=465");
+const { mailer: m465 } = await import("../../api/notify.js?p=465");
 is("port 465 uses implicit TLS", m465().options.secure === true);
 process.env.SMTP_PORT = "587";
-const { mailer: m587 } = await import("./notify.js?p=587");
+const { mailer: m587 } = await import("../../api/notify.js?p=587");
 is("port 587 starts plain and requires an upgrade",
    m587().options.secure === false && m587().options.requireTLS === true);
 
