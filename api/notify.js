@@ -308,6 +308,19 @@ async function compose(kind, id) {
 /* Sending                                                                    */
 /* ------------------------------------------------------------------------- */
 
+/* What to record when the mail server says no.
+
+   Exported so the test can exercise this exact expression against a real
+   refusal rather than a copy of it — a test that rebuilds the string it
+   is checking proves only that two pieces of code agree with each other. */
+export function smtpFailureReason(e) {
+  return [
+    `smtp ${e?.code || "error"}`,
+    e?.responseCode ? `(${e.responseCode})` : "",
+    e?.response || e?.message || "",
+  ].filter(Boolean).join(" ").slice(0, 400);
+}
+
 async function sendEmail(userId, mail) {
   if (!smtpReady && !RESEND_API_KEY) return { sent: false, why: "no SMTP and no RESEND_API_KEY" };
 
@@ -339,8 +352,23 @@ async function sendEmail(userId, mail) {
     } catch (e) {
       /* Falls through to Resend when there is one, because a mail server
          having a bad afternoon should not mean silence. */
-      console.error("SMTP refused:", e?.code, e?.message);
-      if (!RESEND_API_KEY) return { sent: false, why: `smtp ${e?.code || e?.message}` };
+      console.error("SMTP refused:", e?.code, e?.response || e?.message);
+
+      /* The server's own words, which this used to discard.
+
+         `why` was `smtp ${e.code}`, and e.code is the nodemailer category
+         — EMESSAGE, EENVELOPE, EAUTH. That is the shape of the problem,
+         never the reason for it. The reason is in e.response: the literal
+         SMTP reply, "550 5.7.1 ..." or "552 ...", which names what was
+         refused and why. Without it a rejection reads as "smtp EMESSAGE"
+         and there is nothing further to learn, however hard the record is
+         stared at.
+
+         EMESSAGE specifically means the server accepted the conversation
+         and then rejected the message at DATA — a content or policy
+         decision, not a connection or a password. Exactly the case where
+         the reply text is the entire diagnosis. */
+      if (!RESEND_API_KEY) return { sent: false, why: smtpFailureReason(e) };
     }
   }
 
