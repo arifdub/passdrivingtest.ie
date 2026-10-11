@@ -354,6 +354,16 @@ async function sendEmail(userId, mail) {
   return { sent: true, via: "resend" };
 }
 
+/* Which push service refused — Apple, Google, Mozilla. The endpoint itself
+   is a credential-ish URL, so only its host goes into a stored diagnostic. */
+export function hostOf(endpoint) {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return "unparseable endpoint";
+  }
+}
+
 async function sendPush(userId, mail) {
   const state = ensurePush();
   if (!state.ready) return { sent: 0, why: state.why };
@@ -374,6 +384,7 @@ async function sendPush(userId, mail) {
 
   let sent = 0;
   const dead = [];
+  const failed = [];
 
   await Promise.all(subs.map(async (s) => {
     try {
@@ -387,8 +398,22 @@ async function sendPush(userId, mail) {
       /* 404 and 410 mean the browser has thrown the subscription away —
          app uninstalled, data cleared, permission revoked. Keeping those
          rows means every future send retries a dead endpoint for ever. */
-      if (e?.statusCode === 404 || e?.statusCode === 410) dead.push(s.id);
-      else console.error("push failed", e?.statusCode, e?.body || e?.message);
+      if (e?.statusCode === 404 || e?.statusCode === 410) {
+        dead.push(s.id);
+        return;
+      }
+      /* Everything else used to go to console.error and nowhere else, so
+         the caller got {sent: 0, pruned: 0} — a number that cannot be told
+         apart from "there was nothing to send". The reason matters: a 403
+         is a VAPID key that does not match the one the device subscribed
+         with, a 400 is a malformed subscription, a 429 is rate limiting.
+         Carried back in the response so it ends up in notify_log instead
+         of in a log stream nobody opens. */
+      failed.push({
+        host: hostOf(s.endpoint),
+        status: e?.statusCode ?? null,
+        why: String(e?.body || e?.message || e).slice(0, 200),
+      });
     }
   }));
 
@@ -396,7 +421,10 @@ async function sendPush(userId, mail) {
     await db.from("push_subscriptions").delete().in("id", dead);
   }
 
-  return { sent, pruned: dead.length };
+  /* `failed` is omitted when empty so the ordinary success case stays short. */
+  return failed.length
+    ? { sent, pruned: dead.length, failed }
+    : { sent, pruned: dead.length };
 }
 
 /* ------------------------------------------------------------------------- */

@@ -79,5 +79,26 @@ await loadsWith({
   VAPID_SUBJECT: "arifdub@gmail.com",
 }, "a-subject-missing-mailto");
 
+/* -------------------------------------------------------------------------
+   A push that is refused must say so.
+
+   sendPush used to swallow anything that was not a 404 or 410 into
+   console.error and return {sent: 0}, which reads exactly like "this user
+   has no devices". A 403 from Apple — the VAPID key not matching the one
+   the device subscribed with — was therefore indistinguishable from
+   nothing to do. hostOf is the part of that diagnostic that can be tested
+   without a push service: the endpoint is credential-ish, so only its host
+   is ever recorded.
+   ------------------------------------------------------------------------- */
+{
+  const { hostOf } = await import("../../api/notify.js");
+  is("an Apple endpoint reports its host",
+    hostOf("https://web.push.apple.com/abc123secret"), "web.push.apple.com");
+  is("and not the token that follows it",
+    hostOf("https://fcm.googleapis.com/fcm/send/xyz-token").includes("xyz-token"), false);
+  is("a malformed endpoint does not throw",
+    hostOf("not a url"), "unparseable endpoint");
+}
+
 console.log(bad ? `\n${bad} failed` : "\nthe endpoint refuses everything it should, and survives a bad VAPID config");
 process.exit(bad ? 1 : 0);
