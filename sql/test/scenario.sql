@@ -84,6 +84,23 @@ begin
   end;
 end $fn$;
 
+/* RLS on a SELECT does not raise — it filters. So "is this hidden from
+   somebody else" has to be asked as a count, not as a refusal. A refusal
+   check over a SELECT passes whether the policy works or does not exist,
+   which is the exact shape of a test that guards nothing. */
+create or replace function pg_temp.rls_count(stmt text)
+returns bigint language plpgsql as $fn$
+declare n bigint;
+begin
+  set local role authenticated;
+  execute 'select count(*) from (' || stmt || ') q' into n;
+  reset role;
+  return n;
+exception when others then
+  reset role;
+  return -1;   -- a hard refusal is also "cannot see it"
+end $fn$;
+
 create or replace function pg_temp.be(who text) returns void language sql as $$
   select set_config('request.jwt.claim.sub', who, false);
   select set_config('request.jwt.claim.role', 'authenticated', false);
@@ -633,4 +650,62 @@ begin
     'a write still succeeds when the notifier is misconfigured');
 
   update public.notify_config set enabled = false;
+end $outer$;
+
+-- --------------------------------------------------------------------------
+-- Push subscriptions: one row per device, and the device belongs to whoever
+-- is signed in on it
+--
+-- The endpoint is unique across ALL accounts, because a browser issues one
+-- per device and site. Two people sharing a phone, or one signing out and
+-- another in, produce the same endpoint for a different account — so a
+-- plain insert hits the constraint and an upsert on endpoint alone leaves
+-- the row pointing at whoever got there first, silently sending somebody
+-- else's bookings to this phone.
+-- --------------------------------------------------------------------------
+do $outer$
+declare
+  adi constant text := '11111111-1111-1111-1111-111111111111';
+  amy constant text := '22222222-2222-2222-2222-222222222222';
+  ep  constant text := 'https://fcm.googleapis.com/fcm/send/shared-device';
+begin
+  perform set_config('request.jwt.claim.role', 'service_role', false);
+  delete from public.push_subscriptions;
+
+  perform pg_temp.be(adi);
+  perform public.save_push_subscription(ep, 'pub-a', 'auth-a', 'iPhone');
+  perform pg_temp.report(
+    (select user_id from public.push_subscriptions where endpoint = ep) = adi::uuid,
+    'a device is saved against the person who registered it');
+
+  -- The same device, a different person signed in.
+  perform pg_temp.be(amy);
+  perform public.save_push_subscription(ep, 'pub-b', 'auth-b', 'iPhone');
+  perform pg_temp.report(
+    (select count(*) from public.push_subscriptions where endpoint = ep) = 1,
+    'registering again does not duplicate the device');
+  perform pg_temp.report(
+    (select user_id from public.push_subscriptions where endpoint = ep) = amy::uuid,
+    'and the device now belongs to whoever is signed in on it');
+
+  -- A second device for the same person is a second row.
+  perform public.save_push_subscription(ep || '-laptop', 'pub-c', 'auth-c', 'Mac');
+  perform pg_temp.report(
+    (select count(*) from public.push_subscriptions where user_id = amy::uuid) = 2,
+    'a person can have more than one device');
+
+  -- And removing one leaves the other.
+  perform public.delete_push_subscription(ep);
+  perform pg_temp.report(
+    (select count(*) from public.push_subscriptions where user_id = amy::uuid) = 1,
+    'turning it off on one device leaves the others alone');
+
+  -- Nobody can reach somebody else's devices.
+  perform pg_temp.be(adi);
+  perform pg_temp.report(
+    pg_temp.rls_count('select 1 from public.push_subscriptions where user_id = ''' || amy || '''') = 0,
+    'another account cannot see your devices');
+  perform pg_temp.report(
+    pg_temp.rls_count('select 1 from public.push_subscriptions') = 0,
+    'and sees none of them at all, having registered none');
 end $outer$;

@@ -45,7 +45,10 @@ await page.waitForSelector("text=Quick Actions", { timeout: 10000 });
 const account = page.getByRole("button", { name: "Account menu" });
 const bell = page.locator('button[aria-haspopup="dialog"]').first();
 const signedIn = page.getByText("Signed in as");
-const panel = page.getByText("This only updates while the app is open");
+/* The panel itself, by role — anchoring on a sentence inside it meant the
+   check broke the moment that sentence was replaced, and reported the panel
+   as not opening when it opened fine. */
+const panel = page.getByRole("dialog", { name: "Notifications" });
 
 let bad = 0;
 const check = async (what, fn) => {

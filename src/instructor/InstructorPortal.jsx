@@ -53,6 +53,8 @@ import {
 } from "../socialStore";
 import { subscribeInstructor, describeChange } from "../realtime";
 import Toast from "../Toast";
+import PushToggle from "../PushToggle";
+import { refreshSubscription } from "../push";
 import { listLessons, listStudents, timeLabel, KIND_LABEL } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
@@ -174,6 +176,19 @@ export default function InstructorPortal({ onExitRole }) {
     const id = setInterval(tick, 120000);
     return () => { off = true; clearInterval(id); };
   }, [user?.id, section]);
+
+  /* A browser can rotate a push subscription without telling anybody, and
+     the stored endpoint goes quietly dead — the classic "push worked for a
+     week" bug. One cheap upsert per load, keyed on the endpoint. */
+  useEffect(() => {
+    if (!user?.id) return;
+    refreshSubscription();
+    const onMessage = (e) => {
+      if (e.data?.type === "push-subscription-changed") refreshSubscription();
+    };
+    navigator.serviceWorker?.addEventListener?.("message", onMessage);
+    return () => navigator.serviceWorker?.removeEventListener?.("message", onMessage);
+  }, [user?.id]);
 
   /* Live: a booking, a message or an enquiry arriving re-reads the counts
      and says so, instead of the screen sitting on a stale number for up to
@@ -1009,7 +1024,11 @@ function NotificationBell({ counts, onGo, onSeen }) {
       </button>
 
       {open && (
-          <div className="absolute right-0 top-full mt-1 z-40 w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-4">
+          <div
+            role="dialog"
+            aria-label="Notifications"
+            className="absolute right-0 top-full mt-1 z-40 w-72 max-w-[calc(100vw-24px)] rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-4"
+          >
             {counts === null ? (
               <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                 Couldn't check. This needs{" "}
@@ -1057,14 +1076,9 @@ function NotificationBell({ counts, onGo, onSeen }) {
               </>
             )}
 
-            {/* Accurate about what changed and what did not. This is live
-                now — but live is not push, and a badge that updates by
-                itself invites the belief that a closed phone will buzz. */}
-            <p className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              This updates the moment something arrives, as long as the app is
-              open. Your phone won't buzz with it closed — that needs push
-              notifications, which aren't built yet.
-            </p>
+            {/* The offer belongs here, where somebody is already thinking
+                about being told things — not in a prompt on load. */}
+            <PushToggle compact />
           </div>
       )}
     </div>

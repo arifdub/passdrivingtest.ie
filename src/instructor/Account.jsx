@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import AvatarPicker from "../AvatarPicker";
+import PushToggle from "../PushToggle";
 import { setInstructorPhoto } from "../avatars";
 import { PrimaryButton, SecondaryButton, VerifiedBadge } from "../ui";
 import { TRANSMISSIONS, LESSON_TYPES } from "./instructorStore";
@@ -135,6 +136,13 @@ export default function Account({ loading, status, profile, draft, onRegister, o
           />
         </div>
       )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Being told things                                                  */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="mt-4">
+        <PushToggle />
+      </div>
 
       {/* ------------------------------------------------------------------ */}
       {/* Anything still owed                                                */}

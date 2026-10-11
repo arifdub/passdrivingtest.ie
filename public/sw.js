@@ -66,3 +66,79 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
+
+/* ---------------------------------------------------------------------------
+   PUSH
+
+   This is the part that runs when the app is closed. The browser wakes this
+   worker, hands it an encrypted payload the server signed with the VAPID
+   private key, and gives it a few seconds to show something.
+
+   A push that arrives and shows nothing is not allowed: on Chrome and
+   Firefox, failing to call showNotification revokes the site's permission
+   after a few offences. So every branch below ends in a notification, even
+   the one where the payload could not be read.
+   --------------------------------------------------------------------------- */
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    // A malformed or unencrypted payload. Still has to show something.
+    data = {};
+  }
+
+  const title = data.title || "PassDrivingTest";
+  const options = {
+    body: data.body || "Something is waiting in your portal.",
+    icon: "/adi-icon-192.png",
+    badge: "/adi-icon-192.png",
+    // Collapses repeats: three messages in a thread replace each other
+    // rather than stacking three identical banners.
+    tag: data.tag || "pdt-notify",
+    renotify: true,
+    data: { url: data.url || "/adi" },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/adi";
+
+  // Focus a tab that is already on the site rather than opening a fifth one.
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of all) {
+      if (client.url.includes(new URL(url, self.location.origin).pathname)) {
+        await client.focus();
+        return;
+      }
+    }
+    for (const client of all) {
+      if ("navigate" in client) {
+        await client.navigate(url);
+        await client.focus();
+        return;
+      }
+    }
+    await self.clients.openWindow(url);
+  })());
+});
+
+/* A subscription can be rotated by the browser without the user doing
+   anything. Without this the old endpoint goes dead and the device quietly
+   stops receiving — the classic "it worked for a week" push bug.
+
+   The page itself re-saves on every load, which covers the common case;
+   this covers a rotation that happens while nothing is open. */
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil((async () => {
+    const clientsList = await self.clients.matchAll({ includeUncontrolled: true });
+    for (const client of clientsList) {
+      client.postMessage({ type: "push-subscription-changed" });
+    }
+  })());
+});
