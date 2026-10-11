@@ -1,7 +1,7 @@
 {
   "id": "/adi",
-  "name": "PassDrivingTest Instructor",
-  "short_name": "PDT Instructor",
+  "name": "ADI Instructor",
+  "short_name": "ADI Instructor",
   "description": "The instructor portal for PassDrivingTest.ie \u2014 ADI verification, your students, your calendar and your bookings.",
   "start_url": "/adi",
   "scope": "/adi",
