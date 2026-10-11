@@ -628,6 +628,31 @@ begin
     (select count(*) from net._sent where body->>'kind' = 'enquiry') = 1,
     'a new enquiry queues exactly one email');
 
+  -- ------------------------------------------------------------------
+  -- A booking tells both people, not just the instructor
+  --
+  -- The learner picked the time, typed the pick-up and is the one
+  -- waiting; they used to get a screen that said it worked and then
+  -- nothing. Two calls, one per person, because they say different
+  -- things and link to different portals.
+  -- ------------------------------------------------------------------
+  delete from net._sent;
+  insert into public.bookings (instructor_id, learner_id, starts_at, duration_minutes)
+  values (adi::uuid, '22222222-2222-2222-2222-222222222222',
+          date_trunc('hour', now()) + interval '3 days', 60);
+
+  perform pg_temp.report(
+    (select count(*) from net._sent where body->>'kind' = 'booking') = 1,
+    'a booking request still emails the instructor');
+
+  perform pg_temp.report(
+    (select count(*) from net._sent where body->>'kind' = 'booking_learner') = 1,
+    'and now emails the learner as well');
+
+  perform pg_temp.report(
+    (select count(distinct body->>'id') from net._sent) = 1,
+    'both are about the same booking');
+
   perform pg_temp.report(
     (select (body->>'id') is not null and body::text not like '%@%' from net._sent limit 1),
     'the payload carries a row id and no address');

@@ -183,27 +183,66 @@ function when(iso) {
   });
 }
 
-function wrap(title, body, cta) {
+/* The frame every notification email sits in.
+
+   It takes `go` and `audience` because this app has two portals and both
+   get email. Until now the frame hardcoded "Instructor portal", an
+   instructor footer, and a button pointing at /adi — so a learner
+   receiving a message about their own lesson was handed a link to the
+   instructor portal, and told they were getting it because they are an
+   instructor. Neither was true, and the link went somewhere they cannot
+   use.
+
+   Defaulting to the instructor keeps every existing caller behaving
+   exactly as before; the learner emails pass "learner". */
+/* Money, as a person writes it. price_cents because storing money as a
+   float is how a lesson comes to cost 44.99999 euro. */
+export function euro(cents) {
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" })
+    .format((Number(cents) || 0) / 100);
+}
+
+/* The lesson's particulars, as a table rather than a paragraph.
+
+   A table because this is reference material: a learner comes back to this
+   email the night before to check the time and where they are being picked
+   up, and scanning a label-and-value list beats re-reading a sentence.
+
+   Rows are passed as [label, value] and nulls are dropped, so a caller can
+   write `b.pickup ? [...] : null` inline instead of assembling an array
+   first. Every value is escaped — pickup and note are typed by a person. */
+export function detailTable(rows) {
+  const cells = rows.filter(Boolean).map(([label, value]) => `
+    <tr>
+      <td style="padding:8px 12px;color:#64748b;font-size:14px;white-space:nowrap;vertical-align:top">${esc(label)}</td>
+      <td style="padding:8px 12px;color:#0f172a;font-size:14px;font-weight:600">${esc(String(value))}</td>
+    </tr>`).join("");
+
+  return `<table role="presentation" width="100%" style="background:#f8fafc;border-radius:12px;border-collapse:separate;border-spacing:0">${cells}</table>`;
+}
+
+export function wrap(title, body, cta, { go = "/adi", audience = "instructor" } = {}) {
+  const learner = audience === "learner";
   return `<!doctype html><html><body style="margin:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
     <table role="presentation" width="100%" style="max-width:520px;background:#fff;border-radius:16px;overflow:hidden">
       <tr><td style="background:#0f172a;padding:20px 24px">
         <div style="color:#fff;font-weight:800;font-size:17px">PassDrivingTest.ie</div>
-        <div style="color:#94a3b8;font-size:13px">Instructor portal</div>
+        <div style="color:#94a3b8;font-size:13px">${learner ? "Driving lessons" : "Instructor portal"}</div>
       </td></tr>
       <tr><td style="padding:24px">
         <h1 style="margin:0 0 12px;font-size:19px;color:#0f172a">${esc(title)}</h1>
         ${body}
-        <a href="${NOTIFY_SITE}/adi" style="display:inline-block;margin-top:20px;background:#10b981;color:#0f172a;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:12px">${esc(cta)}</a>
+        <a href="${NOTIFY_SITE}${go}" style="display:inline-block;margin-top:20px;background:#10b981;color:#0f172a;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:12px">${esc(cta)}</a>
       </td></tr>
       <tr><td style="padding:16px 24px;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5">
-        You're getting this because you're an instructor on PassDrivingTest.ie.
-        Turn these off under Account in the portal.
+        ${learner
+          ? "You're getting this because you booked a lesson through PassDrivingTest.ie. Turn these off under Account in the app."
+          : "You're getting this because you're an instructor on PassDrivingTest.ie. Turn these off under Account in the portal."}
       </td></tr>
     </table>
   </td></tr></table></body></html>`;
 }
-
 async function nameOf(userId) {
   const { data: i } = await db.from("instructor_profiles")
     .select("full_name").eq("user_id", userId).maybeSingle();
@@ -257,6 +296,54 @@ async function compose(kind, id) {
     };
   }
 
+  /* The same booking, told to the other person.
+
+     WORDING. At this moment the booking is 'requested': the instructor has
+     not accepted it yet. "Your lesson is confirmed" would be the natural
+     sentence and it would be false — a learner who reads it and turns up
+     has been misled by us, and the hour may yet be declined. So this says
+     what is actually true: the request is in, the hour is held, and a
+     confirmation follows.
+
+     It carries the full detail anyway, because the detail is the same
+     either way and a learner wants it in writing now, not after. */
+  if (kind === "booking_learner") {
+    const { data: b } = await db.from("bookings")
+      .select("id, instructor_id, learner_id, starts_at, duration_minutes, price_cents, pickup, note, status")
+      .eq("id", id).single();
+    if (!b || b.status !== "requested") return null;
+
+    const instructor = await nameOf(b.instructor_id);
+    return {
+      to: b.learner_id,
+      go: "/app",
+      subject: `Lesson request sent - ${when(b.starts_at)}`,
+      push: {
+        title: "Lesson request sent",
+        body: `${instructor} - ${when(b.starts_at)}`,
+      },
+      html: wrap(
+        "Your lesson request is with your instructor",
+        `<p style="margin:0 0 14px;color:#334155;line-height:1.6">
+           We have sent your request to <strong>${esc(instructor)}</strong>.
+           The hour is held for you until they confirm — you will get another
+           email the moment they do.</p>
+         ${detailTable([
+           ["Instructor", instructor],
+           ["When", when(b.starts_at)],
+           ["How long", `${b.duration_minutes || 60} minutes`],
+           b.pickup ? ["Pick-up", b.pickup] : null,
+           b.price_cents ? ["Price", euro(b.price_cents)] : null,
+           b.note ? ["Your note", b.note] : null,
+         ])}
+         <p style="margin:14px 0 0;color:#64748b;font-size:14px">
+           You pay your instructor directly. Nothing is charged here.</p>`,
+        "See it in the app",
+        { go: "/app", audience: "learner" },
+      ),
+    };
+  }
+
   if (kind === "message") {
     const { data: m } = await db.from("booking_messages")
       .select("id, booking_id, sender_id, body").eq("id", id).single();
@@ -276,9 +363,14 @@ async function compose(kind, id) {
       go: to === b.instructor_id ? "/adi" : "/app",
       subject: `New message about ${when(b.starts_at)}`,
       push: { title: `${from}`, body: m.body.slice(0, 120) },
+      /* `go` was computed just above and then ignored by wrap, so a
+         learner was sent to the instructor portal to read a message about
+         their own lesson. It is passed through now. */
       html: wrap(`${from} sent you a message`,
         `<p style="margin:0;padding:14px;background:#f1f5f9;border-radius:12px;color:#334155;line-height:1.6">${esc(m.body)}</p>`,
-        "Reply in the portal"),
+        to === b.instructor_id ? "Reply in the portal" : "Reply in the app",
+        { go: to === b.instructor_id ? "/adi" : "/app",
+          audience: to === b.instructor_id ? "instructor" : "learner" }),
     };
   }
 
