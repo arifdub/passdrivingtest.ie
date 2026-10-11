@@ -679,6 +679,27 @@ begin
     'a write still succeeds when the notifier is misconfigured');
 
   update public.notify_config set enabled = false;
+
+  -- ------------------------------------------------------------------
+  -- The badge number is the bell's number
+  --
+  -- Two expressions that are meant to be the same expression. If they
+  -- ever drift, the icon says 3 while the bell beside it says 1, and
+  -- people stop believing either. Compared directly rather than trusted
+  -- to stay in step.
+  -- ------------------------------------------------------------------
+  perform set_config('request.jwt.claim.sub', adi, true);
+  perform pg_temp.report(
+    (select public.waiting_count_for(adi::uuid))
+      = (select unseen from public.my_waiting()),
+    'the app icon count and the bell count are the same number');
+
+  -- And it must not be reachable by anyone with a session. It takes a
+  -- user id, so a signed-in caller could otherwise ask for somebody
+  -- else's backlog.
+  perform pg_temp.rls_refused(
+    'select public.waiting_count_for(''' || adi || '''::uuid)',
+    'waiting_count_for is not executable by a signed-in caller');
 end $outer$;
 
 -- --------------------------------------------------------------------------

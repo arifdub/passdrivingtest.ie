@@ -32,7 +32,21 @@
          ===================================================================== -->
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/png" sizes="192x192" href="/adi-icon-192.png" />
+    <!-- Three apple-touch-icon lines for one icon, because iOS picks by a
+         rule rather than by preference and a near-miss gets no icon at all:
+         it falls back to a screenshot or a letter tile, which is what the
+         instructor app has been showing.
+
+         The sized one is what current iOS wants. The unsized one is the
+         fallback it looks for when no size matches. The precomposed one is
+         for older iOS, which ignores the others entirely.
+
+         Note that iOS reads these ONCE, when the app is added to the home
+         screen, and never again. A wrong icon cannot be fixed by deploying
+         a right one — the app has to be removed and re-added. -->
     <link rel="apple-touch-icon" sizes="180x180" href="/adi-apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/adi-apple-touch-icon.png" />
+    <link rel="apple-touch-icon-precomposed" href="/adi-apple-touch-icon.png" />
     <link rel="manifest" href="/manifest-adi.json" />
     <meta name="theme-color" content="#0f172a" />
     <!-- Both names. Apple has read its own since 2008; the unprefixed one is

@@ -376,10 +376,29 @@ async function sendPush(userId, mail) {
     .select("id, endpoint, p256dh, auth").eq("user_id", userId);
   if (!subs?.length) return { sent: 0, why: "no devices" };
 
+  /* The number for the app icon.
+
+     The service worker that receives this push has no session, so it
+     cannot work the count out for itself — it has to be told. Asking the
+     database for it here means the icon and the bell are reading the same
+     expression (sql/22 is my_waiting()'s own), rather than two counts that
+     drift apart until the icon says 3 and the bell says 1.
+
+     A failure is not worth abandoning the push for: a notification with no
+     number beats no notification. */
+  let badge;
+  try {
+    const { data } = await db.rpc("waiting_count_for", { p_user: userId });
+    if (data !== null && data !== undefined) badge = Number(data);
+  } catch {
+    /* sql/22 not run yet, most likely. The push still goes. */
+  }
+
   const payload = JSON.stringify({
     title: mail.push.title,
     body: mail.push.body,
     url: `${NOTIFY_SITE}${mail.go}`,
+    ...(Number.isFinite(badge) ? { badge } : {}),
   });
 
   let sent = 0;

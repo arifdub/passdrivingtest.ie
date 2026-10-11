@@ -32,6 +32,7 @@ import {
   PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge, useDismiss,
 } from "../ui";
 import { useAuth } from "../appAuth";
+import { setBadge } from "../badge";
 import { usePlatform } from "../platform";
 import { portalsFor } from "../portals";
 import Enquiries from "./Enquiries";
@@ -151,15 +152,26 @@ export default function InstructorPortal({ onExitRole }) {
   useEffect(() => { refresh(); }, [refresh]);
 
   /* What wants an answer, re-asked every couple of minutes while the portal
-     is open — and only while it is. There is no push here: a phone in a
-     pocket will not light up, because that needs a service worker and VAPID
-     keys on a server. The bell says what it knows and the panel behind it
-     says what it cannot do. */
+     is open. Push now covers the closed-app case, so this is no longer the
+     only way a count can change — but it is still the one that corrects it:
+     a push can be missed, dropped or refused, and the poll is what makes
+     the bell right again afterwards. */
   const recount = useCallback(async () => {
     if (!user?.id) return;
     const { counts } = await whatIsWaiting();
     setWaiting(counts);
   }, [user?.id]);
+
+  /* The home-screen icon shows the bell's number, and never its own.
+
+     One effect on the one piece of state, so every path that can change
+     the count — first load, the poll below, a realtime event, opening the
+     bell — moves the icon too, without any of them having to remember to.
+     The service worker sets it while the app is closed; this corrects it
+     the moment the app is open. */
+  useEffect(() => {
+    setBadge(waitingTotal(waiting));
+  }, [waiting]);
 
   useEffect(() => {
     if (!user?.id) return;

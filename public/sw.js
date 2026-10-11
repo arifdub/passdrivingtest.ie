@@ -101,7 +101,32 @@ self.addEventListener("push", (event) => {
     data: { url: data.url || "/adi" },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  /* The number on the home-screen icon.
+
+     Badging is a separate thing from the notification itself: the banner
+     is the alert, the badge is what is still waiting afterwards. iOS 16.4+
+     supports it for an installed web app, and ignores it otherwise, so a
+     phone that cannot do this simply shows the banner and no number.
+
+     The count comes from the server because this worker has no session and
+     cannot ask the database itself. When the payload carries no count —
+     an older server, or the lookup failed — the badge is left exactly as
+     it is rather than guessed at or cleared. */
+  const badge = Number(data.badge);
+
+  event.waitUntil((async () => {
+    await self.registration.showNotification(title, options);
+    try {
+      if (Number.isFinite(badge) && badge > 0) {
+        await self.navigator?.setAppBadge?.(badge);
+      } else if (badge === 0) {
+        await self.navigator?.clearAppBadge?.();
+      }
+    } catch {
+      /* Unsupported, or refused. The notification has already been shown,
+         which is the part that matters. */
+    }
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {
