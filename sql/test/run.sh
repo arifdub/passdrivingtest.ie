@@ -33,8 +33,50 @@ PORT=${PGPORT:-5433}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SQL="$(dirname "$HERE")"
 
-if [ ! -d "$DIR/data" ]; then
+# Whether the server ANSWERS, not whether its data directory is on disk.
+#
+# These two came apart the moment the container was restarted: the directory
+# survived, so this script skipped startup, and then every psql failed with
+# "No such file or directory" — which set -e turned into a silent exit 2
+# after printing one heading. A test harness that cannot run has to say so,
+# not stop quietly looking like it passed.
+start_pg() {
   echo "→ starting a throwaway Postgres in $DIR"
+  if [ "$(id -u)" = "0" ]; then
+    id pgtest >/dev/null 2>&1 || useradd -M pgtest
+    chown -R pgtest "$DIR"
+    SU="su pgtest -s /bin/bash -c"
+  else
+    SU="bash -c"
+  fi
+  # Stop anything still holding the data directory first. A postmaster can
+  # outlive its socket here — the process was alive and answering nothing,
+  # because the socket under /var/tmp had been swept out from under it. In
+  # that state a plain start fails on postmaster.pid and a plain connect
+  # fails on the missing socket, so neither half of the usual check helps.
+  # Stopping and starting is cheap and leaves the cluster's data alone.
+  if [ -f "$DIR/data/postmaster.pid" ]; then
+    $SU "$PGBIN/pg_ctl -D $DIR/data -m fast stop" >/dev/null 2>&1 || true
+    sleep 1
+  fi
+  $SU "$PGBIN/pg_ctl -D $DIR/data -o '-p $PORT -k $DIR -c listen_addresses=' -l $DIR/log start" >/dev/null 2>&1 || true
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    pg_isready -h "$DIR" -p "$PORT" -U postgres >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  echo "✗ Postgres would not start. Last lines of $DIR/log:" >&2
+  tail -20 "$DIR/log" >&2 || true
+  exit 1
+}
+
+if [ -d "$DIR/data" ] && ! pg_isready -h "$DIR" -p "$PORT" -U postgres >/dev/null 2>&1; then
+  # The cluster is there but nothing is listening — a restart, not a first run.
+  # Keep the data directory; just bring it back up.
+  start_pg
+fi
+
+if [ ! -d "$DIR/data" ]; then
+  echo "→ initialising a throwaway Postgres in $DIR"
   rm -rf "$DIR"; mkdir -p "$DIR"
   # initdb refuses to run as root, so an unprivileged owner is made for it.
   if [ "$(id -u)" = "0" ]; then
@@ -45,8 +87,7 @@ if [ ! -d "$DIR/data" ]; then
     SU="bash -c"
   fi
   $SU "$PGBIN/initdb -D $DIR/data -U postgres --auth=trust" >/dev/null
-  $SU "$PGBIN/pg_ctl -D $DIR/data -o '-p $PORT -k $DIR -c listen_addresses=' -l $DIR/log start" >/dev/null
-  sleep 2
+  start_pg
 fi
 
 q() { psql -h "$DIR" -p "$PORT" -U postgres "$@"; }
@@ -54,7 +95,11 @@ q() { psql -h "$DIR" -p "$PORT" -U postgres "$@"; }
 apply() { # apply <db> <file...>
   local db=$1; shift
   q -q -c "drop database if exists $db;" -c "create database $db;" >/dev/null 2>&1
-  q -d "$db" -q -v ON_ERROR_STOP=1 -f "$HERE/baseline.sql" >/dev/null
+  if ! out=$(q -d "$db" -v ON_ERROR_STOP=1 -f "$HERE/baseline.sql" 2>&1); then
+    # Was `>/dev/null` with no check, so a broken baseline exited the whole
+    # run without naming itself.
+    echo "  ✗ baseline.sql did not apply to $db"; echo "$out" | tail -6; return 1
+  fi
   for f in "$@"; do
     if [ "${f:0:5}" = "EXEC:" ]; then q -d "$db" -q -c "${f:5}" >/dev/null; continue; fi
     out=$(q -d "$db" -v ON_ERROR_STOP=1 --single-transaction -f "$f" 2>&1) || true

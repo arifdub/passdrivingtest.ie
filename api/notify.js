@@ -102,7 +102,9 @@ const smtpReady = Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
 
    The timeouts are deliberately shorter than the function's own limit. A
    mail server that is not answering should give up and let the push through,
-   not hold the whole invocation until Vercel kills it. */
+   not hold the whole invocation until Vercel kills it — and shorter again
+   than the window the caller in Postgres is willing to wait, or the answer
+   arrives after nobody is listening. */
 export function mailer() {
   const port = Number(SMTP_PORT) || 465;
   return nodemailer.createTransport({
@@ -118,9 +120,15 @@ export function mailer() {
       ? { rejectUnauthorized: false }
       : undefined,
     pool: false,
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 12000,
+    /* These three add up to the worst case, and the worst case has to fit
+       inside the 25s that sql/21 gives pg_net to wait for a reply — not
+       just inside Vercel's 30s. Past that window the database records the
+       call as having failed with no status code even when the mail went
+       out, which is how a slow mail server came to look like a broken one.
+       6 + 6 + 10 = 22s, leaving room for a cold start in front of it. */
+    connectionTimeout: 6000,
+    greetingTimeout: 6000,
+    socketTimeout: 10000,
   });
 }
 

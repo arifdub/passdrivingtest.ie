@@ -102,6 +102,28 @@ create table if not exists net._sent (
   url text,
   headers jsonb,
   body jsonb,
+  -- Recorded, not ignored. A five-second ceiling in front of a serverless
+  -- cold start plus an SMTP handshake meant every real call was abandoned
+  -- before it could answer, and the database logged a failure for a request
+  -- that was only slow. The stub kept no record of the budget, so no test
+  -- could have noticed. Now it can.
+  timeout_ms int,
+  created timestamptz default now()
+);
+alter table net._sent add column if not exists timeout_ms int;
+
+-- The real pg_net writes each outcome here, and for a request that never
+-- completed status_code is NULL and error_msg is the only column with
+-- anything in it. public.notify_log (sql/21) reads this, so the stub has to
+-- have the shape, or the view cannot be created at all.
+create table if not exists net._http_response (
+  id bigint primary key,
+  status_code int,
+  content_type text,
+  headers jsonb,
+  content text,
+  timed_out boolean,
+  error_msg text,
   created timestamptz default now()
 );
 
@@ -118,7 +140,8 @@ as $$
 declare
   v_id bigint;
 begin
-  insert into net._sent (url, headers, body) values (url, headers, body)
+  insert into net._sent (url, headers, body, timeout_ms)
+  values (url, headers, body, timeout_milliseconds)
   returning id into v_id;
   return v_id;
 end $$;

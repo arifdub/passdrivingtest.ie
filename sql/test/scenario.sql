@@ -636,6 +636,31 @@ begin
     (select headers->>'x-notify-secret' = 'a1b2c3d4e5f60718293a4b5c6d7e8f90' from net._sent limit 1),
     'and the shared secret, so the endpoint is not open to the world');
 
+  -- The budget it gives the endpoint to answer in.
+  --
+  -- This is the check that was missing. sql/19 waited 5s, while the endpoint
+  -- it calls permits itself 30s and lets the SMTP handshake alone take 22 of
+  -- them. So pg_net hung up first on every real call and wrote a row with no
+  -- status_code — a recorded failure for a request that was merely slow, and
+  -- a day spent reading the wrong column looking for a reason.
+  --
+  -- Asserted as a floor rather than an exact number so that tuning the
+  -- endpoint does not have to come back and edit a test, but a return to a
+  -- value that cannot physically fit does.
+  perform pg_temp.report(
+    (select timeout_ms >= 20000 from net._sent order by id desc limit 1),
+    'the call waits long enough for a cold start and a slow mail server');
+
+  -- And the view that reads the outcome. It exists because my own ad-hoc
+  -- query built its label as 'call -> ' || status_code: for a failed call
+  -- status_code is NULL, 'x' || NULL is NULL in Postgres, and so every row
+  -- that had something to say printed as blank.
+  perform pg_temp.report(
+    (select count(*) from information_schema.columns
+      where table_schema = 'public' and table_name = 'notify_log'
+        and column_name in ('status_code', 'error_msg', 'timed_out')) = 3,
+    'notify_log shows error_msg, not just a status code that may be null');
+
   -- An accepted booking must NOT email: the instructor did that themselves.
   select id into v_booking from public.bookings where status = 'accepted' limit 1;
   select count(*) into v_before from net._sent;
