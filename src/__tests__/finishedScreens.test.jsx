@@ -127,11 +127,20 @@ describe("the verification gate", () => {
   });
 
   it("offers a way to the learner app, not a dead end", () => {
+    /* A real <button>, not an <a href> — a plain anchor was reported not
+       to navigate at all from inside the installed home-screen app, so
+       this goes through window.location.href on click instead, the same
+       way every other exit from this SPA already does (App.jsx's onBack
+       and onExitRole). renderToString cannot execute that click, so what
+       is checked here is what IS checkable without a DOM: that the
+       control exists, as a button rather than a link, with the label
+       that promises where it goes. */
     const html = renderToString(
       <VerificationGate status="draft" profile={{}} draft={{}}
         onRegister={() => {}} onSignOut={() => {}} />,
     );
-    expect(html).toContain('href="/app"');
+    expect(html).toContain("Go to the learner app");
+    expect(html).not.toContain('href="/app"');
   });
 
   it("does not imply a learner identity the account does not have", () => {

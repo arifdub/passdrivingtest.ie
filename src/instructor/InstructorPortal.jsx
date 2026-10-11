@@ -956,18 +956,28 @@ export function VerificationGate({ status, profile, draft, onRegister, onSignOut
           onRegister={onRegister}
         />
 
-        {/* Not a tab, not a dead end — one line, easy to miss on purpose.
-            Someone here to finish registering should see that path first;
-            someone who signed up at the wrong door should still find
-            this without having to ask. */}
-        <div className="mt-5 text-center">
-          <a
-            href="/app"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+        {/* A button, not a line of text easy to mistake for a label — and
+            window.location.href rather than a plain <a href>, matching
+            how every other exit from this SPA already works (App.jsx's
+            own onBack and onExitRole do the same). /app is a separate
+            HTML document and a separate bundle (vite.config.js's own
+            entries), not a route this router owns, so this has to be a
+            real navigation and not React Router's — a plain <a> SHOULD
+            already do that on an ordinary page, but inside an installed
+            home-screen app (display: standalone) a tap on an anchor has
+            been seen to do nothing at all rather than navigate, which is
+            exactly the complaint this replaces: forcing it through
+            location.href is the one path that works the same whether
+            this is a browser tab or an icon on a home screen. */}
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={() => { window.location.href = "/app"; }}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold py-3 text-sm transition hover:border-emerald-400 dark:hover:border-emerald-600 hover:text-emerald-600 dark:hover:text-emerald-400"
           >
-            <GraduationCap size={15} />
+            <GraduationCap size={16} />
             Not an instructor? Go to the learner app
-          </a>
+          </button>
         </div>
 
         <div className="mt-8 text-center">
