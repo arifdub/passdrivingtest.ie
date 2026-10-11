@@ -124,9 +124,36 @@ export function mailer() {
   });
 }
 
-const pushReady = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
-if (pushReady) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+/* NOT AT MODULE SCOPE.
+
+   setVapidDetails VALIDATES the keys and throws — "Vapid public key should
+   be 65 bytes long when decoded", or "Vapid subject is not a valid URL" for
+   a subject missing its mailto: prefix. Called while the module loads, that
+   throw happens before the handler exists, so Vercel answers
+   FUNCTION_INVOCATION_FAILED and nothing in the function ever runs.
+ 
+   Which meant one mistyped VAPID variable took down the email as well, and
+   the error that came back named neither. Push failing should cost push,
+   and nothing else. */
+let pushState = null;
+
+function ensurePush() {
+  if (pushState) return pushState;
+
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    pushState = { ready: false, why: "VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY is not set" };
+    return pushState;
+  }
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    pushState = { ready: true };
+  } catch (e) {
+    /* The library's own message is exact and worth passing through: it names
+       which of the three values it rejected and why. */
+    pushState = { ready: false, why: `VAPID config rejected: ${e?.message || e}` };
+    console.error("Push is disabled:", pushState.why);
+  }
+  return pushState;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -320,7 +347,8 @@ async function sendEmail(userId, mail) {
 }
 
 async function sendPush(userId, mail) {
-  if (!pushReady) return { sent: 0, why: "no VAPID keys" };
+  const state = ensurePush();
+  if (!state.ready) return { sent: 0, why: state.why };
 
   const { data: p } = await db.from("profiles")
     .select("push_notifications").eq("id", userId).maybeSingle();
