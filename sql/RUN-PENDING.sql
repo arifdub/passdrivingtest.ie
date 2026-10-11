@@ -3152,8 +3152,8 @@ revoke all on public.notify_config from anon, authenticated;
 insert into public.notify_config (id, endpoint, secret, enabled)
 values (
   true,
-  'https://YOUR-PROJECT-REF.supabase.co/functions/v1/notify',
-  'PASTE-THE-SAME-SECRET-YOU-SET-ON-THE-FUNCTION',
+  'REPLACE_ME_endpoint',
+  'REPLACE_ME_secret',
   false   -- flip to true once both values above are real
 )
 on conflict (id) do nothing;   -- never overwrites what you have already set
@@ -3174,7 +3174,16 @@ begin
 
   -- Not configured yet, or deliberately off. Silent: a missing email must
   -- never be an error on the write that triggered it.
-  if not found or not cfg.enabled or cfg.endpoint like '%YOUR-PROJECT-REF%' then
+  if not found or not cfg.enabled or cfg.endpoint like 'REPLACE_ME%' then
+    return;
+  end if;
+
+  if cfg.secret like 'REPLACE_ME%'
+     or cfg.secret ~* '^(the same|paste|your|<)'
+     or length(cfg.secret) < 16 then
+    raise warning
+      'notify_config.secret is still a placeholder (%). No notification was sent. Set it to the same NOTIFY_SECRET that is in Vercel.',
+      left(cfg.secret, 30);
     return;
   end if;
 

@@ -612,7 +612,11 @@ begin
 
   update public.notify_config
      set endpoint = 'https://example.supabase.co/functions/v1/notify',
-         secret = 'test-secret', enabled = true;
+         /* Long enough to pass the placeholder guard in sql/19, which
+            refuses anything under 16 characters or starting with words like
+            "the same" — because that exact sentence was pasted as a value
+            in production and produced a silent 401. */
+         secret = 'a1b2c3d4e5f60718293a4b5c6d7e8f90', enabled = true;
 
   delete from net._sent;
   delete from public.instructor_enquiries;
@@ -629,7 +633,7 @@ begin
     'the payload carries a row id and no address');
 
   perform pg_temp.report(
-    (select headers->>'x-notify-secret' = 'test-secret' from net._sent limit 1),
+    (select headers->>'x-notify-secret' = 'a1b2c3d4e5f60718293a4b5c6d7e8f90' from net._sent limit 1),
     'and the shared secret, so the endpoint is not open to the world');
 
   -- An accepted booking must NOT email: the instructor did that themselves.
@@ -708,4 +712,47 @@ begin
   perform pg_temp.report(
     pg_temp.rls_count('select 1 from public.push_subscriptions') = 0,
     'and sees none of them at all, having registered none');
+end $outer$;
+
+-- --------------------------------------------------------------------------
+-- A placeholder left in notify_config must not produce a doomed call
+--
+-- The instruction for that field read 'the same NOTIFY_SECRET from step 3'
+-- — a sentence that looks enough like a value to be pasted as one, and was.
+-- The request then went out, the function refused it with a 401, and
+-- nothing anywhere said why.
+-- --------------------------------------------------------------------------
+do $outer$
+declare
+  adi constant text := '11111111-1111-1111-1111-111111111111';
+  before bigint;
+begin
+  perform set_config('request.jwt.claim.role', 'service_role', false);
+  delete from public.instructor_enquiries;
+  delete from net._sent;
+
+  update public.notify_config
+     set endpoint = 'https://example.supabase.co/functions/v1/notify',
+         secret = 'the same NOTIFY_SECRET from step 3',
+         enabled = true;
+
+  select count(*) into before from net._sent;
+  insert into public.instructor_enquiries (instructor_id, learner_id, learner_name, message)
+  values (adi::uuid, '22222222-2222-2222-2222-222222222222', 'Amy', 'hello');
+
+  perform pg_temp.report(
+    (select count(*) from net._sent) = before,
+    'a placeholder secret sends nothing, rather than a request doomed to 401');
+
+  -- And a real one still works.
+  update public.notify_config set secret = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+  delete from public.instructor_enquiries;
+  insert into public.instructor_enquiries (instructor_id, learner_id, learner_name, message)
+  values (adi::uuid, '33333333-3333-3333-3333-333333333333', 'Ben', 'hello');
+
+  perform pg_temp.report(
+    (select count(*) from net._sent) > before,
+    'and a real secret still sends');
+
+  update public.notify_config set enabled = false;
 end $outer$;
