@@ -55,6 +55,7 @@ import {
 import { subscribeInstructor, describeChange } from "../realtime";
 import Toast from "../Toast";
 import PushToggle from "../PushToggle";
+import PushNudge from "../PushNudge";
 import { refreshSubscription } from "../push";
 import { listLessons, listStudents, timeLabel, KIND_LABEL } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
@@ -526,6 +527,16 @@ function InstructorDashboard({
             : "Your students, lessons and bookings, all in one place."}
         </p>
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* "Your phone will not ring"                                       */}
+      {/* ---------------------------------------------------------------- */}
+      {/* Directly under the greeting, because the toggle itself lives in
+          the bell menu — which somebody only opens when they already
+          suspect there is something waiting. It renders nothing when
+          notifications are on, when the browser cannot do push, or when
+          there is nothing the person could act on. */}
+      <PushNudge />
 
       {/* ---------------------------------------------------------------- */}
       {/* Where to go                                                      */}
