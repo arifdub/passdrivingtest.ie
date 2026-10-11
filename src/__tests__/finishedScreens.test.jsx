@@ -15,7 +15,7 @@ vi.mock("../appAuth", () => ({
 }));
 
 const { default: Marketplace } = await import("../instructor/Marketplace");
-const { InstructorDashboard } = await import("../instructor/InstructorPortal");
+const { InstructorDashboard, VerificationGate } = await import("../instructor/InstructorPortal");
 const { default: Earnings } = await import("../instructor/Earnings");
 const { default: Reviews, Stars } = await import("../instructor/Reviews");
 const { default: Messages } = await import("../instructor/Messages");
@@ -47,14 +47,16 @@ describe("they render at all", () => {
    "begins in a loading state" caveat already says about every screen
    here. */
 describe("the instructor dashboard", () => {
+  /* loading/status/draft/onRegister used to be props here, when the
+     dashboard still carried its own VerificationCard for an unverified
+     instructor. That branch moved to VerificationGate, which the whole
+     portal now shows INSTEAD of this component when the account is not
+     verified — so this component is only ever mounted already-verified,
+     and those props went with it. Left off deliberately, not by oversight. */
   it("renders, including both static panels", () => {
     const html = renderToString(
       <InstructorDashboard
-        loading={false}
-        status="verified"
         profile={{ full_name: "Aoife" }}
-        draft={{}}
-        onRegister={() => {}}
         onGo={() => {}}
         onChanged={() => {}}
         pulse=""
@@ -72,12 +74,82 @@ describe("the instructor dashboard", () => {
        the panel's presence. */
     const html = renderToString(
       <InstructorDashboard
-        loading={false} status="verified" profile={{}} draft={{}}
-        onRegister={() => {}} onGo={() => {}} onChanged={() => {}} pulse=""
+        profile={{}} onGo={() => {}} onChanged={() => {}} pulse=""
       />,
     );
     expect(html).not.toContain("no email yet");
     expect(html).not.toContain("Nothing reaches you outside the app yet");
+  });
+});
+
+/* What an unverified account sees INSTEAD of the dashboard above — not a
+   banner on top of it. InstructorPortal's own top-level gate (status !==
+   "verified") cannot be exercised here: it starts loading=true under
+   useState, and that never resolves under renderToString since effects do
+   not run server-side, so every render of the full portal would show the
+   "Loading your account…" spinner regardless of status. What IS testable,
+   and is the thing with judgement in it, is this component itself. */
+describe("the verification gate", () => {
+  it.each([
+    [null, "Get verified to take bookings"],
+    ["draft", "Your registration is half finished"],
+    ["pending", "Verification in progress"],
+    /* Not "We couldn't…" verbatim: React escapes the apostrophe as &#x27;
+       in rendered text, so a literal ' in the expectation never matches
+       — the same class of mismatch as a curly vs straight quote. Matched
+       on the unambiguous part either side of it instead. */
+    ["rejected", "verify your ADI number"],
+    ["suspended", "Your account is suspended"],
+  ])("renders for status %s", (status, expectedHeading) => {
+    const html = renderToString(
+      <VerificationGate
+        status={status}
+        profile={{ full_name: "Cian" }}
+        draft={null}
+        onRegister={() => {}}
+        onSignOut={() => {}}
+      />,
+    );
+    expect(html).toContain(expectedHeading);
+  });
+
+  it("never shows the dashboard's own content", () => {
+    /* The bug this screen exists to fix: a dashboard full of zeros shown
+       to someone it has nothing real to say to. None of the dashboard's
+       own panels should be reachable from here. */
+    const html = renderToString(
+      <VerificationGate status="draft" profile={{}} draft={{}}
+        onRegister={() => {}} onSignOut={() => {}} />,
+    );
+    expect(html).not.toContain("Today's Lessons");
+    expect(html).not.toContain("New Bookings");
+    expect(html).not.toContain("Learners pay you directly");
+  });
+
+  it("offers a way to the learner app, not a dead end", () => {
+    const html = renderToString(
+      <VerificationGate status="draft" profile={{}} draft={{}}
+        onRegister={() => {}} onSignOut={() => {}} />,
+    );
+    expect(html).toContain('href="/app"');
+  });
+
+  it("does not imply a learner identity the account does not have", () => {
+    /* profiles.role is one value, set once. This link leaves the portal —
+       it does not claim to be, or to create, a second account. */
+    const html = renderToString(
+      <VerificationGate status="draft" profile={{}} draft={{}}
+        onRegister={() => {}} onSignOut={() => {}} />,
+    );
+    expect(html).toContain("Not an instructor?");
+  });
+
+  it("leaves signing out reachable — unverified is not locked out", () => {
+    const html = renderToString(
+      <VerificationGate status="draft" profile={{}} draft={{}}
+        onRegister={() => {}} onSignOut={() => {}} />,
+    );
+    expect(html).toContain("Sign out");
   });
 });
 

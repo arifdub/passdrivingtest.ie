@@ -26,7 +26,7 @@ import {
   Home, Calendar, Users, CalendarCheck, Clock, Store, Wallet, Star,
   MessageSquare, UserCircle, BellRing, ShieldCheck, ShieldAlert, Clock3,
   Loader2, Pencil, Bell, ChevronRight, ChevronLeft, Plus, CalendarPlus,
-  UserPlus, Zap, CalendarClock, Banknote,
+  UserPlus, Zap, CalendarClock, Banknote, LogOut, GraduationCap,
 } from "lucide-react";
 import {
   PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge, useDismiss,
@@ -223,6 +223,21 @@ export default function InstructorPortal({ onExitRole }) {
   const status = profile?.verification_status
     || (draft ? "draft" : null);
 
+  /* Neither the gate below nor the real portal, for the single request it
+     takes to find out which one is right. Showing the full dashboard here
+     — even briefly — would flash the exact "zeros and tiles" view the
+     gate exists to prevent; showing the gate here would flash "you are
+     not verified" at somebody who, a moment later, turns out to be. A
+     plain wait is the only state that cannot be the wrong answer. */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center gap-2.5 text-slate-500 dark:text-slate-400">
+        <Loader2 size={18} className="animate-spin" />
+        <span className="text-sm">Loading your account…</span>
+      </div>
+    );
+  }
+
   if (registering) {
     return (
       <InstructorRegistration
@@ -230,6 +245,27 @@ export default function InstructorPortal({ onExitRole }) {
         userId={user?.id}
         onDone={async () => { setRegistering(false); await refresh(); }}
         onCancel={() => setRegistering(false)}
+      />
+    );
+  }
+
+  /* An unverified account sees none of the portal — not the dashboard, not
+     Students, not the Calendar — because none of it is real for them yet.
+     Every tile behind this gate reads 0, because an instructor nobody can
+     find has no students, no bookings, nothing to check against a
+     calendar: a dashboard full of zeros is not a feature, it is the portal
+     describing its own uselessness in detail. The one useful thing on it,
+     "get verified", is exactly what this gate leads with.
+
+     `loading` is already handled above, so by here the account is known. */
+  if (status !== "verified") {
+    return (
+      <VerificationGate
+        status={status}
+        profile={profile}
+        draft={draft}
+        onRegister={() => setRegistering(true)}
+        onSignOut={signOut}
       />
     );
   }
@@ -324,11 +360,7 @@ export default function InstructorPortal({ onExitRole }) {
         {section === "dashboard"
           ? (
             <InstructorDashboard
-              loading={loading}
-              status={status}
               profile={profile}
-              draft={draft}
-              onRegister={() => setRegistering(true)}
               onGo={setSection}
               /* Answering a request from the dashboard has to move the
                  bell, the tab badge and the icon badge, none of which
@@ -474,7 +506,7 @@ function TabBar({ section, onGo, waiting }) {
    --------------------------------------------------------------------------- */
 
 export function InstructorDashboard({
-  loading, status, profile, draft, onRegister, onGo, onChanged, pulse,
+  profile, onGo, onChanged, pulse,
 }) {
   const { user } = useAuth();
   const [newEnquiries, setNewEnquiries] = useState(undefined);
@@ -524,18 +556,21 @@ export function InstructorDashboard({
        the screen mounted. */
   }, [user?.id, pulse]);
 
-  /* Only worth asking once verified — nobody can find an unlisted instructor
-     to enquire with, so the answer is always zero and the failure when
-     sql/09 is missing would be noise on a screen that has nothing to do
-     with it. */
+  /* Used to also check status === "verified" here — nobody can find an
+     unlisted instructor to enquire with, so the answer would always be
+     zero and the failure when sql/09 is missing would be noise on a
+     screen that has nothing to do with it. That check is redundant now:
+     InstructorPortal does not mount this component at all until the
+     account is verified (see VerificationGate), so by the time this
+     effect can run, it always is. */
   useEffect(() => {
     let off = false;
-    if (status !== "verified" || !user?.id) return;
+    if (!user?.id) return;
     receivedEnquiries(user.id).then(({ rows }) => {
       if (!off) setNewEnquiries(rows.filter(r => r.status === "new").length);
     });
     return () => { off = true; };
-  }, [status, user?.id]);
+  }, [user?.id]);
 
   const firstName = (profile?.full_name || "").trim().split(/\s+/)[0]
     || (user?.email || "").split("@")[0];
@@ -654,19 +689,12 @@ export function InstructorDashboard({
         />
       </div>
 
-      {/* Verification, while there is still something to do about it. */}
-      {loading
-        ? <div className="mt-3"><StatusSkeleton /></div>
-        : status === "verified"
-          ? null
-          : (
-            <div className="mt-3">
-              <VerificationCard
-                status={status} profile={profile} draft={draft}
-                onRegister={onRegister}
-              />
-            </div>
-          )}
+      {/* Verification used to have a card here for whoever was not yet
+          verified. It cannot be reached now — InstructorPortal gates the
+          whole dashboard behind verification before this component ever
+          mounts (see VerificationGate) — so there is nothing left for an
+          unverified instructor to see on this screen at all, which was
+          the point. */}
 
       <div className="mt-3 grid md:grid-cols-2 gap-3">
         {/* -------------------------------------------------------------- */}
@@ -875,6 +903,87 @@ function Action({ icon: Icon, tone, label, onClick }) {
 }
 
 /* ---------------------------------------------------------------------------
+   THE GATE
+
+   What an unverified account sees instead of the portal. Used to be: the
+   full dashboard, tiles and tab bar and all, with a VerificationCard
+   bolted on top of it saying "by the way, none of this works yet." Every
+   number on that dashboard was a zero, because an instructor nobody can
+   find has no students, no bookings, nothing a calendar could show —
+   so the screen's main content was itself an argument for why the screen
+   should not be shown.
+
+   This replaces the whole portal, not just the dashboard tile, for as
+   long as that is true: Students, Calendar, Bookings and Messages are
+   exactly as empty and exactly as pointless as the Home tab was, so
+   gating only Home would just move the zeros one tap away rather than
+   remove them.
+
+   Two ways out, both honest about what they do:
+
+     - finish verification, via the same InstructorRegistration flow and
+       the same status-aware copy (VerificationCard, below) that already
+       existed — not duplicated, reused, so the wording for "draft" vs
+       "pending" vs "rejected" lives in exactly one place
+     - leave for the learner app. This does not create or imply a second,
+       learner-facing identity for an instructor account — profiles.role
+       is one value, set once at sign-up (sql/05) — it is a plain link to
+       /app for somebody who signed up at the wrong door and wants the
+       study tool instead, which does not require any particular role to
+       use as a guest or to sign in to separately.
+
+   Signing out stays reachable too. Being unverified is not being locked
+   out of your own account.
+   --------------------------------------------------------------------------- */
+export function VerificationGate({ status, profile, draft, onRegister, onSignOut }) {
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 text-white">
+        <div
+          className="max-w-lg mx-auto px-5 pb-5"
+          style={{ paddingTop: "max(1.25rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
+        >
+          <h1 className="text-xl font-black tracking-tight">Instructor</h1>
+          <p className="text-sm text-slate-400">
+            {profile?.full_name || draft?.full_name || ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex-1 max-w-lg w-full mx-auto px-5 py-5">
+        <VerificationCard
+          status={status} profile={profile} draft={draft}
+          onRegister={onRegister}
+        />
+
+        {/* Not a tab, not a dead end — one line, easy to miss on purpose.
+            Someone here to finish registering should see that path first;
+            someone who signed up at the wrong door should still find
+            this without having to ask. */}
+        <div className="mt-5 text-center">
+          <a
+            href="/app"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+          >
+            <GraduationCap size={15} />
+            Not an instructor? Go to the learner app
+          </a>
+        </div>
+
+        <div className="mt-8 text-center">
+          <button
+            onClick={onSignOut}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 hover:text-red-500"
+          >
+            <LogOut size={13} /> Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
    VERIFICATION
 
    The first thing on the dashboard until it's resolved, because until an ADI
@@ -1013,16 +1122,6 @@ function Panel({ tone, icon: Icon, title, children }) {
     </div>
   );
 }
-
-function StatusSkeleton() {
-  return (
-    <div className="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-2xl p-5 flex items-center gap-3">
-      <Loader2 size={18} className="text-slate-400 animate-spin shrink-0" />
-      <p className="text-sm text-slate-500 dark:text-slate-400">Checking your registration…</p>
-    </div>
-  );
-}
-
 
 /* ---------------------------------------------------------------------------
    THE BELL
