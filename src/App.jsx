@@ -36,6 +36,7 @@ import {
 import { AuthProvider, useAuth } from "./appAuth";
 import { PlatformProvider, usePlatform } from "./platform";
 import { ProgressProvider } from "./progressStore";
+import { useTheme } from "./theme";
 import { TextSizeProvider } from "./textSize";
 import AuthScreen from "./AuthScreen";
 import RoleEntry from "./RoleEntry";
@@ -98,20 +99,10 @@ function AppShell() {
 
   /* Measured by the tab bar itself — see the shell's render, below. */
   const [tabBarHeight, setTabBarHeight] = useState(0);
-  const [theme, setTheme] = useState(() => {
-    try {
-      return localStorage.getItem("pdt-theme") || "light";
-    } catch {
-      return "light";
-    }
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    try { localStorage.setItem("pdt-theme", theme); } catch { /* ignore */ }
-  }, [theme]);
-
-  const toggleTheme = () => setTheme(t => (t === "dark" ? "light" : "dark"));
+  /* Moved to src/theme.js, which the portals share. Two copies reading
+     and writing one localStorage key would disagree the moment either
+     changed it — and the portal account menu changes it. */
+  const { theme, toggleTheme } = useTheme();
 
   const go = useCallback((view) => {
     setStack(s => [...s, view]);

@@ -21,11 +21,12 @@
 import React from "react";
 import {
   UserCircle, Pencil, Mail, Phone, MapPin, Car, Euro, Briefcase,
-  ShieldCheck, Clock3, ShieldAlert, Loader2,
+  ShieldCheck, Clock3, ShieldAlert, Loader2, Moon, Sun,
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import AvatarPicker from "../AvatarPicker";
 import PushToggle from "../PushToggle";
+import { useTheme } from "../theme";
 import { setInstructorPhoto } from "../avatars";
 import { PrimaryButton, SecondaryButton, VerifiedBadge } from "../ui";
 import { TRANSMISSIONS, LESSON_TYPES } from "./instructorStore";
@@ -39,6 +40,7 @@ function euro(cents) {
 }
 
 export default function Account({ loading, status, profile, draft, onRegister, onChanged }) {
+  const { isDark, setTheme } = useTheme();
   const { user } = useAuth();
   const p = profile || draft;
 
@@ -142,6 +144,55 @@ export default function Account({ loading, status, profile, draft, onRegister, o
       {/* ------------------------------------------------------------------ */}
       <div className="mt-4">
         <PushToggle />
+
+        {/* Appearance.
+
+            Also in the account menu behind the photo, which is where it
+            gets used — this is here because this is where somebody looks
+            when they are hunting for a setting rather than flicking one.
+            Both read the same value, so they can never disagree. */}
+        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4">
+          <div className="flex items-start gap-3">
+            <span className="shrink-0 w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center">
+              {isDark ? <Moon size={17} /> : <Sun size={17} />}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm text-slate-900 dark:text-white">Appearance</p>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                {isDark
+                  ? "Dark. Easier on the eyes in a car at night."
+                  : "Light. The default, and easier to read in daylight."}
+              </p>
+
+              <div className="mt-2.5 inline-flex rounded-xl border border-slate-200 dark:border-slate-600 p-0.5">
+                <button
+                  onClick={() => setTheme("light")}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                    !isDark
+                      ? "bg-slate-900 text-white dark:bg-slate-600"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  <Sun size={13} /> Light
+                </button>
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                    isDark
+                      ? "bg-slate-900 text-white dark:bg-slate-600"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  <Moon size={13} /> Dark
+                </button>
+              </div>
+
+              <p className="mt-2 text-[11px] text-slate-400">
+                Saved on this device.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------------ */}

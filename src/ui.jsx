@@ -8,7 +8,8 @@
 */
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { BadgeCheck, ChevronLeft, ChevronRight, Lock, LogOut, Repeat, X } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Lock, LogOut, Moon, Repeat, Sun, X } from "lucide-react";
+import { useTheme } from "./theme";
 
 /* ------------------------------------------------------------------------- */
 /* The brand lockup: the wheel from public/logo.png with the name set in live
@@ -547,6 +548,11 @@ export function AccountMenu({
   const root = useRef(null);
   useDismiss(root, open, useCallback(() => setOpen(false), []));
 
+  /* Shared with every other portal and with the theory app — see
+     src/theme.js. Read here rather than passed in, so no caller has to
+     remember to wire it up. */
+  const { isDark, toggleTheme } = useTheme();
+
   return (
     <div className="relative" ref={root}>
       <button
@@ -597,6 +603,38 @@ export function AccountMenu({
             <span className="font-bold text-slate-900 dark:text-white">{email}</span>
           </p>
         )}
+
+        {/* Light or dark.
+
+            In the menu rather than buried in a settings screen, because
+            it is a thing people flick back and forth — at night, in a
+            car, in daylight — not a thing they configure once.
+
+            stopPropagation because the wrapper above closes the menu on
+            any click inside it. Without it the menu would vanish on the
+            tap, and you would have to reopen it to see what you had just
+            done. Every other row in here navigates away, so closing is
+            right for them and wrong for this one. */}
+        <div className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+            className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-left whitespace-nowrap text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+          >
+            {isDark
+              ? <Sun size={15} className="text-slate-400 shrink-0" />
+              : <Moon size={15} className="text-slate-400 shrink-0" />}
+            <span className="flex-1">{isDark ? "Light mode" : "Dark mode"}</span>
+            {/* A switch, so the current state is visible without reading
+                the label and working out which way round it is. */}
+            <span className={`shrink-0 w-9 h-5 rounded-full p-0.5 transition ${
+              isDark ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+            }`}>
+              <span className={`block w-4 h-4 rounded-full bg-white transition-transform ${
+                isDark ? "translate-x-4" : ""
+              }`} />
+            </span>
+          </button>
+        </div>
 
         {actions.length > 0 && (
           <div className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1">
