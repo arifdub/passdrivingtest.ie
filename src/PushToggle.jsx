@@ -16,9 +16,10 @@
 */
 
 import React, { useEffect, useState, useCallback } from "react";
-import { BellRing, BellOff, Loader2, AlertCircle, Check, Share } from "lucide-react";
+import { BellRing, BellOff, Loader2, AlertCircle, Check, Share, Send } from "lucide-react";
 import {
   enablePush, disablePush, currentSubscription, pushBlockedReason, isIOS, isStandalone,
+  sendTestPush,
 } from "./push";
 
 export default function PushToggle({ compact }) {
@@ -26,6 +27,11 @@ export default function PushToggle({ compact }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [blocked, setBlocked] = useState(null);
+  /* The result of a test send, kept verbatim. A tick here would be a lie:
+     the server can report a successful send to a phone that stays silent,
+     and that distinction is the whole reason this button exists. */
+  const [test, setTest] = useState(null);
+  const [testing, setTesting] = useState(false);
 
   const check = useCallback(async () => {
     setBlocked(pushBlockedReason());
@@ -41,6 +47,12 @@ export default function PushToggle({ compact }) {
     setBusy(false);
     if (!r.ok) { setError(r.error); setBlocked(pushBlockedReason()); return; }
     setOn(true);
+  }
+
+  async function runTest() {
+    setTesting(true); setTest(null);
+    setTest(await sendTestPush());
+    setTesting(false);
   }
 
   async function turnOff() {
@@ -142,13 +154,94 @@ export default function PushToggle({ compact }) {
           )}
 
           {on && (
-            <p className="mt-2 text-[11px] text-slate-400 flex items-center gap-1">
-              <Check size={11} /> This device only — turn it on separately on a laptop.
-            </p>
+            <>
+              <p className="mt-2 text-[11px] text-slate-400 flex items-center gap-1">
+                <Check size={11} /> This device only — turn it on separately on a laptop.
+              </p>
+
+              <button
+                onClick={runTest}
+                disabled={testing}
+                className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 transition disabled:opacity-50"
+              >
+                {testing
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <Send size={12} />}
+                {testing ? "Sending…" : "Send a test notification"}
+              </button>
+
+              {test && <TestResult test={test} />}
+            </>
           )}
         </div>
       </div>
     </Wrap>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   What came back, said plainly.
+
+   Three outcomes that a single success/failure flag would blur together:
+
+     - the server could not send, and says why (a key mismatch, no devices)
+     - the server sent, and the phone showed it — working
+     - the server sent, and the phone showed nothing — delivered but
+       silenced, which is a phone setting, not a bug here
+
+   The third is the one that has cost the most time, so it gets said out
+   loud rather than hidden behind a tick.
+   --------------------------------------------------------------------------- */
+export function TestResult({ test }) {
+  if (!test.ok) {
+    return (
+      <p className="mt-2 text-xs text-red-500 flex items-start gap-1.5">
+        <AlertCircle size={13} className="shrink-0 mt-0.5" /> {test.error}
+      </p>
+    );
+  }
+
+  if (test.why) {
+    return (
+      <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
+        {test.why}
+      </p>
+    );
+  }
+
+  if (!test.sent) {
+    const first = test.failed?.[0];
+    return (
+      <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
+        {first
+          ? `${first.host} refused it${first.status ? ` (${first.status})` : ""}: ${first.why}`
+          : "Nothing was sent, and no reason was given."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+      <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
+        Sent to {test.sent} device{test.sent === 1 ? "" : "s"}.
+      </p>
+      <p className="mt-0.5">
+        Nothing on your phone within a few seconds? Then it was delivered and
+        silenced — check Settings → Notifications for this app, and that
+        Focus or Do Not Disturb is off.
+      </p>
+      {test.expired > 0 && (
+        <p className="mt-0.5">
+          {test.expired} old device{test.expired === 1 ? " was" : "s were"} expired and removed.
+        </p>
+      )}
+      {test.failed?.length > 0 && (
+        <p className="mt-0.5 text-amber-600 dark:text-amber-400">
+          {test.failed[0].host} refused one
+          {test.failed[0].status ? ` (${test.failed[0].status})` : ""}: {test.failed[0].why}
+        </p>
+      )}
+    </div>
   );
 }
 

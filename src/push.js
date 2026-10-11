@@ -270,3 +270,49 @@ export async function refreshSubscription() {
   const sub = await currentSubscription();
   if (sub) await saveSubscription(sub);
 }
+
+/*
+  ---------------------------------------------------------------------------
+  Ask the server to push to this account's devices, right now.
+
+  Separate from enablePush because it answers a different question.
+  enablePush asks "may I?" — the browser's permission and a subscription
+  row. This asks "does it actually arrive?", which is the only question
+  that matters once the toggle says yes and the phone still stays silent.
+
+  Returns the server's own account of each device rather than a boolean,
+  because "nothing happened" has several causes that look identical from
+  here: a key the device did not subscribe with, an expired endpoint, a
+  notification shown but silenced by the phone.
+  ---------------------------------------------------------------------------
+*/
+export async function sendTestPush() {
+  if (!HAS_SUPABASE) return { ok: false, error: "Not signed in." };
+
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) return { ok: false, error: "Sign in again and retry." };
+
+  let res;
+  try {
+    res = await fetch("/api/test-push", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+  } catch {
+    /* Offline, or the function is not deployed on this host. */
+    return { ok: false, error: "Could not reach the server." };
+  }
+
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+
+  if (!res.ok) {
+    return { ok: false, error: body?.error || `Server said ${res.status}.` };
+  }
+  return { ok: true, ...body };
+}
