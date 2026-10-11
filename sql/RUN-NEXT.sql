@@ -1,7 +1,7 @@
 -- ===========================================================================
 -- PASSDRIVINGTEST.IE — THE TWO FILES STILL TO RUN
 --
--- sql/04 to sql/11 are already in. This is sql/12 to sql/16, in order,
+-- sql/04 to sql/11 are already in. This is sql/12 to sql/17, in order,
 -- pasting in one go:
 --
 --   https://supabase.com/dashboard/project/zwwtmvolghcoopicznwa/sql/new
@@ -1483,3 +1483,100 @@ $$;
 
 revoke all on function public.my_waiting() from public, anon;
 grant execute on function public.my_waiting() to authenticated;
+
+-- ###########################################################################
+-- ### 17 — AN ENQUIRY YOU CANNOT ANSWER, DECLINE OR DELETE
+-- ###########################################################################
+--
+-- An instructor tapping "Just answered" on their own inbox was told "a
+-- learner may withdraw an enquiry, nothing else". sql/07 let one account
+-- hold both sides; sql/09's trigger, written before that, asked the learner
+-- question first and never reached the instructor branch. The instructor's
+-- rule wins now. Self-enquiries are refused like self-bookings already were,
+-- and either party can delete one.
+
+-- ---------------------------------------------------------------------------
+-- 1. The instructor's rule wins on their own enquiry
+-- ---------------------------------------------------------------------------
+create or replace function public.enforce_enquiry_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(auth.role(), 'service_role') = 'service_role'
+     or public.is_platform_admin() then
+    return new;
+  end if;
+
+  if new.status is distinct from old.status then
+    -- INSTRUCTOR FIRST. An account can be both sides (sql/07), and on an
+    -- enquiry addressed to you the thing you are doing is instructing.
+    -- Asking the learner question first refused the instructor their own
+    -- inbox.
+    if auth.uid() = old.instructor_id then
+      if new.status not in ('answered', 'declined') then
+        raise exception 'an instructor may answer or decline an enquiry'
+          using errcode = 'insufficient_privilege';
+      end if;
+    elsif auth.uid() = old.learner_id then
+      if new.status <> 'withdrawn' then
+        raise exception 'a learner may withdraw an enquiry, nothing else'
+          using errcode = 'insufficient_privilege';
+      end if;
+    else
+      raise exception 'that enquiry is not yours'
+        using errcode = 'insufficient_privilege';
+    end if;
+  end if;
+
+  -- Neither side rewrites what the learner said, or who it was for.
+  if new.learner_id is distinct from old.learner_id
+     or new.instructor_id is distinct from old.instructor_id
+     or new.message is distinct from old.message then
+    raise exception 'an enquiry cannot be rewritten'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  return new;
+end $$;
+
+drop trigger if exists instructor_enquiries_status on public.instructor_enquiries;
+create trigger instructor_enquiries_status
+  before update on public.instructor_enquiries
+  for each row execute function public.enforce_enquiry_status();
+
+-- ---------------------------------------------------------------------------
+-- 2. You cannot enquire with yourself
+--
+-- The same rule request_booking already has. Existing rows are left alone:
+-- this only refuses new ones, and section 1 makes the existing ones
+-- answerable.
+-- ---------------------------------------------------------------------------
+drop policy if exists enquiry_learner_insert on public.instructor_enquiries;
+create policy enquiry_learner_insert on public.instructor_enquiries
+  for insert with check (
+    auth.uid() = learner_id
+    and learner_id <> instructor_id
+    and exists (
+      select 1 from public.instructor_profiles i
+       where i.user_id = instructor_id
+         and i.verification_status = 'verified'
+         and i.listed = true
+    )
+  );
+
+-- ---------------------------------------------------------------------------
+-- 3. Somebody can delete one
+--
+-- Either party, and an admin. Deleting is not the same as declining —
+-- declining is an answer the learner can see, deleting is "this should not
+-- be in my list". Both are wanted, and until now only the first existed.
+-- ---------------------------------------------------------------------------
+drop policy if exists enquiry_delete on public.instructor_enquiries;
+create policy enquiry_delete on public.instructor_enquiries
+  for delete using (
+    auth.uid() in (learner_id, instructor_id)
+    or public.is_platform_admin()
+  );

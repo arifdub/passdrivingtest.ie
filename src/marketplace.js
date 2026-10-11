@@ -134,6 +134,23 @@ export async function setEnquiryStatus(id, status) {
 
 /* ------------------------------------------------------------------------- */
 
+/* Removing an enquiry outright. Not the same as declining — declining is an
+   answer the learner can see, deleting is "this should not be in my list".
+   Either party may do it (sql/17). */
+export async function deleteEnquiry(id) {
+  if (!HAS_SUPABASE) return { ok: false, error: "No database connection." };
+
+  const { error } = await supabase.from("instructor_enquiries").delete().eq("id", id);
+  if (error) {
+    if (error.code === "42501" || /row-level security/i.test(error.message || "")) {
+      return { ok: false, error: "Deleting enquiries isn't set up yet (sql/17 hasn't been run)." };
+    }
+    console.warn("Enquiry not deleted:", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, error: null };
+}
+
 export function euro(cents) {
   if (cents === null || cents === undefined || cents === "") return null;
   return `€${(cents / 100).toFixed(2)}`;

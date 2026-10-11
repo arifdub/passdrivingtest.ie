@@ -44,6 +44,46 @@ exception when others then
   perform pg_temp.report(false, what || ' — REFUSED: ' || left(sqlerrm, 60));
 end $$;
 
+/* --------------------------------------------------------------------------
+   RUNNING AS A REAL USER, SO POLICIES ACTUALLY APPLY
+   --------------------------------------------------------------------------
+   Everything else in this file runs as the superuser, which bypasses
+   row-level security entirely. Triggers still fire — that is why the trigger
+   checks mean something — but a POLICY could be missing, or backwards, and
+   every one of those checks would still pass.
+
+   These switch to the `authenticated` role for one statement, which is what
+   PostgREST does for a signed-in request. A policy that does not exist shows
+   up as a permission error instead of silently allowing everything.
+   -------------------------------------------------------------------------- */
+create or replace function pg_temp.rls_refused(stmt text, what text)
+returns void language plpgsql as $fn$
+begin
+  begin
+    set local role authenticated;
+    execute stmt;
+    reset role;
+    perform pg_temp.report(false, what || ' — WAS ALLOWED');
+  exception when others then
+    reset role;
+    perform pg_temp.report(true, what || ' (' || left(sqlerrm, 44) || ')');
+  end;
+end $fn$;
+
+create or replace function pg_temp.rls_ok(stmt text, what text)
+returns void language plpgsql as $fn$
+begin
+  begin
+    set local role authenticated;
+    execute stmt;
+    reset role;
+    perform pg_temp.report(true, what);
+  exception when others then
+    reset role;
+    perform pg_temp.report(false, what || ' — REFUSED: ' || left(sqlerrm, 50));
+  end;
+end $fn$;
+
 create or replace function pg_temp.be(who text) returns void language sql as $$
   select set_config('request.jwt.claim.sub', who, false);
   select set_config('request.jwt.claim.role', 'authenticated', false);
@@ -467,3 +507,70 @@ begin
     (select unread_messages from public.my_waiting()) = 0,
     'reading a thread clears its unread count');
 end $$;
+
+-- --------------------------------------------------------------------------
+-- Enquiries: answerable, deletable, and not sendable to yourself
+--
+-- The bug on screen was an instructor told "a learner may withdraw an
+-- enquiry, nothing else" on an enquiry addressed to them. One account can
+-- hold both sides (sql/07), the trigger asked the learner question first,
+-- and the instructor branch was never reached — so the enquiry could not be
+-- moved and the 1 on the tile stayed with it.
+--
+-- The last three run as the `authenticated` role, so the policies apply.
+-- --------------------------------------------------------------------------
+grant usage on schema public to authenticated, anon;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+
+do $outer$
+declare
+  adi constant text := '11111111-1111-1111-1111-111111111111';
+  amy constant text := '22222222-2222-2222-2222-222222222222';
+begin
+  perform set_config('request.jwt.claim.role', 'service_role', false);
+  perform set_config('request.jwt.claim.sub', '', false);
+  delete from public.instructor_enquiries;
+
+  -- The exact row that was stuck: an account enquiring with itself.
+  insert into public.instructor_enquiries
+    (instructor_id, learner_id, learner_name, learner_phone, area, message)
+  values (adi::uuid, adi::uuid, 'Arif', '0860000000', 'D24', 'test');
+
+  perform pg_temp.be(adi);
+  perform pg_temp.expect_ok(
+    'update public.instructor_enquiries set status = ''answered'' where learner_id = instructor_id',
+    'an instructor can answer their own inbox on an account that is both sides');
+
+  perform pg_temp.expect_ok(
+    'delete from public.instructor_enquiries where learner_id = instructor_id',
+    'and delete an enquiry');
+
+  perform pg_temp.rls_refused(
+    'insert into public.instructor_enquiries (instructor_id, learner_id, learner_name, message)'
+    || ' values (''' || adi || ''', ''' || adi || ''', ''Arif'', ''again'')',
+    'a new self-enquiry is refused, with RLS applied');
+
+  /* As the LEARNER, which is who the insert policy is written for — the
+     first version of this check inserted Amy's enquiry while acting as the
+     instructor, so it failed on `auth.uid() = learner_id` and looked like
+     the policy was broken. */
+  perform pg_temp.be(amy);
+  perform pg_temp.rls_ok(
+    'insert into public.instructor_enquiries (instructor_id, learner_id, learner_name, message)'
+    || ' values (''' || adi || ''', ''' || amy || ''', ''Amy'', ''hello'')',
+    'but a real learner may still send one');
+
+  /* An UPDATE that matches no rows raises nothing, so a refusal check over
+     an empty table passes for the wrong reason. The row above is the one
+     this is about, and it is asserted to exist first. */
+  perform pg_temp.report(
+    exists (select 1 from public.instructor_enquiries
+             where learner_id = amy::uuid and instructor_id = adi::uuid),
+    'the learner''s enquiry is really there to be tested against');
+
+  perform pg_temp.rls_refused(
+    'update public.instructor_enquiries set status = ''answered'''
+    || ' where learner_id = ''' || amy || ''' and instructor_id = ''' || adi || '''',
+    'a learner cannot answer on the instructor''s behalf');
+
+end $outer$;

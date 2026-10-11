@@ -24,11 +24,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   MessageSquare, Phone, MapPin, Check, X, Loader2, AlertCircle, RefreshCw,
-  UserPlus,
+  UserPlus, Trash2,
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import { EmptyState, PrimaryButton, SecondaryButton } from "../ui";
-import { receivedEnquiries, setEnquiryStatus } from "../marketplace";
+import { receivedEnquiries, setEnquiryStatus, deleteEnquiry } from "../marketplace";
 import { addStudent } from "./teachingStore";
 import { when } from "../admin/reviewStore";
 
@@ -139,6 +139,7 @@ function EnquiryCard({ row, onDone, onAddedStudent }) {
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [added, setAdded] = useState(false);
 
   /* The whole point of an enquiry. Everything the learner typed is already
@@ -165,6 +166,15 @@ function EnquiryCard({ row, onDone, onAddedStudent }) {
     if (row.status === "new") await setEnquiryStatus(row.id, "answered");
     await onDone();
     onAddedStudent?.();
+  }
+
+  async function remove() {
+    setBusy(true);
+    setProblem(null);
+    const r = await deleteEnquiry(row.id);
+    setBusy(false);
+    if (!r.ok) { setConfirmingDelete(false); setProblem(r.error); return; }
+    await onDone();
   }
 
   async function mark(status) {
@@ -208,10 +218,20 @@ function EnquiryCard({ row, onDone, onAddedStudent }) {
         </a>
       )}
 
+      {/* Dismissable. This used to be a banner with no way out: a refusal
+          from the database appeared and then sat on the card for the rest of
+          the session, under buttons that still looked like they would work. */}
       {problem && (
         <div className="mt-3 flex items-start gap-2 text-sm bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-xl px-3 py-2">
           <AlertCircle size={15} className="mt-0.5 shrink-0" />
-          <span>{problem}</span>
+          <span className="flex-1">{problem}</span>
+          <button
+            onClick={() => setProblem(null)}
+            aria-label="Dismiss"
+            className="shrink-0 -mr-1 -mt-1 p-1 opacity-60 hover:opacity-100"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 
@@ -221,7 +241,29 @@ function EnquiryCard({ row, onDone, onAddedStudent }) {
         </p>
       )}
 
-      {row.status !== "declined" && !added && (
+      {confirmingDelete ? (
+        <div className="mt-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 p-3.5">
+          <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+            Delete this enquiry? It goes for good — the learner's name,
+            number and message with it.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              disabled={busy}
+              onClick={remove}
+              className="rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 text-sm transition"
+            >
+              {busy ? "Deleting…" : "Delete"}
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-bold px-4 py-2.5 text-sm"
+            >
+              Keep it
+            </button>
+          </div>
+        </div>
+      ) : row.status !== "declined" && !added ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <PrimaryButton full={false} disabled={busy} onClick={keepAsStudent}>
             <span className="inline-flex items-center gap-2">
@@ -239,6 +281,23 @@ function EnquiryCard({ row, onDone, onAddedStudent }) {
               </SecondaryButton>
             </>
           )}
+          <button
+            onClick={() => { setProblem(null); setConfirmingDelete(true); }}
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-500 dark:text-slate-400 hover:text-red-500 px-2"
+          >
+            <Trash2 size={15} /> Delete
+          </button>
+        </div>
+      ) : (
+        /* A declined or already-handled enquiry still needs a way out of
+           the list, which is the whole reason delete exists. */
+        <div className="mt-4">
+          <button
+            onClick={() => { setProblem(null); setConfirmingDelete(true); }}
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-500 dark:text-slate-400 hover:text-red-500"
+          >
+            <Trash2 size={15} /> Delete this enquiry
+          </button>
         </div>
       )}
     </div>

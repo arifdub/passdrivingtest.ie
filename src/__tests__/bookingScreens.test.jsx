@@ -102,3 +102,23 @@ describe("an empty slot list explains itself", () => {
     expect(r).not.toMatch(/paused|fully booked|haven't set/i);
   });
 });
+
+/* ------------------------------------------------------------------------- */
+/* The enquiry card                                                           */
+/*                                                                            */
+/* A missing icon import builds cleanly and throws at runtime — the screen    */
+/* goes blank and the only trace is a console nobody is watching. Rendering   */
+/* the card is what catches it.                                               */
+/* ------------------------------------------------------------------------- */
+
+const { default: Enquiries } = await import("../instructor/Enquiries");
+
+describe("Enquiries", () => {
+  it("renders without crashing", () => {
+    /* It opens on its filter row rather than a spinner, so that is what is
+       asserted. The point of this test is that it renders AT ALL. */
+    const html = renderToString(<Enquiries />);
+    expect(html).toContain("New");
+    expect(html).toContain("Declined");
+  });
+});
