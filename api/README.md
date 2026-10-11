@@ -23,10 +23,21 @@ npx web-push generate-vapid-keys
 You get a public key and a private key. The public one goes in the browser
 bundle; the private one never leaves Vercel.
 
-## 2. Get a Resend key (for email)
+## 2. Your own SMTP details
 
-https://resend.com — the free tier is 3,000 emails a month. Until you verify
-a domain, send from `onboarding@resend.dev`.
+The same mail server Supabase already uses for password resets. In Supabase
+it is under **Authentication → Emails → SMTP Settings** — host, port and
+username are shown there; the password is the mailbox password you set, and
+Supabase will not show it back, so take it from your hosting control panel
+if you do not have it to hand.
+
+You need: host, port, username, password, and the address to send from.
+
+Sending from your own server rather than a third party matters for one
+practical reason beyond taste: those password resets have already taught
+inboxes that mail from your domain, sent by that server, is wanted. A new
+sender starts that reputation from zero, and the first thing a new sender
+gets is the spam folder.
 
 ## 3. Set them in Vercel
 
@@ -38,8 +49,11 @@ the one marked `VITE_`:
 | `SUPABASE_URL` | `https://zwwtmvolghcoopicznwa.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | your **secret** key — the `sb_secret_…` one |
 | `NOTIFY_SECRET` | any long random string; step 4 uses the same one |
-| `RESEND_API_KEY` | `re_…` |
-| `NOTIFY_FROM` | `PassDrivingTest <onboarding@resend.dev>` |
+| `SMTP_HOST` | e.g. `mail.passdrivingtest.ie` |
+| `SMTP_PORT` | `465` or `587` — see below |
+| `SMTP_USER` | the mailbox it signs in as |
+| `SMTP_PASS` | that mailbox's password |
+| `NOTIFY_FROM` | `PassDrivingTest <noreply@passdrivingtest.ie>` |
 | `VAPID_PUBLIC_KEY` | public key from step 1 |
 | `VAPID_PRIVATE_KEY` | private key from step 1 |
 | `VAPID_SUBJECT` | `mailto:you@yourdomain.ie` |
@@ -65,6 +79,23 @@ update public.notify_config set
   enabled  = true;
 ```
 
+### 465 or 587?
+
+Use whatever Supabase is already using — it works, so copy it.
+
+- **465** is TLS from the first byte.
+- **587** starts plain and upgrades with STARTTLS.
+
+Getting this backwards does not produce an error. It hangs, and then the
+function times out, which looks exactly like a mail server ignoring you.
+
+If your host's certificate is issued for the hosting provider rather than
+for your own domain — common on shared hosting — add
+`SMTP_ALLOW_SELF_SIGNED` = `true`. The mail still travels encrypted; the
+name on the certificate just is not checked.
+
+---
+
 ## 5. Check it
 
 Turn notifications on in the portal (Account → Get notified on this device),
@@ -76,7 +107,29 @@ select status_code, created from net._http_response order by created desc limit 
 
 `200` means the database reached the function. If nothing arrives after
 that, Vercel's function logs say why — the function returns a JSON body
-reporting what happened to the email and the push separately.
+reporting what happened to the email and the push separately, so you can
+tell which half is broken.
+
+### Testing without arranging a real booking
+
+Find your own user id:
+
+```sql
+select id, email from auth.users where email = 'arifdub@gmail.com';
+```
+
+Then, from anywhere (replace both values):
+
+```sh
+curl -X POST https://passdrivingtest.ie/api/notify \
+  -H "content-type: application/json" \
+  -H "x-notify-secret: YOUR-NOTIFY_SECRET" \
+  -d '{"kind":"test","id":"YOUR-USER-ID"}'
+```
+
+It replies with exactly what happened to the email and the push. If you
+would rather not use a terminal for this either, say so — the same thing
+can go behind a button in the admin panel.
 
 ---
 

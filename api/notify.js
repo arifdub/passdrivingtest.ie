@@ -30,15 +30,34 @@
   refused email does not stop the push, and nothing reports an error back to
   a learner who has already successfully booked a lesson.
 
+  EMAIL GOES THROUGH YOUR OWN SMTP
+
+  The same server that already sends the password-reset mail. That is worth
+  preferring over a third-party API for a reason beyond taste: those resets
+  have already taught inboxes that mail from this domain, sent by this
+  server, is wanted. Sending notifications from somewhere else starts that
+  reputation again from zero, and the first thing a new sender gets is the
+  spam folder.
+
+  Resend stays as a fallback purely so a project with no SMTP configured
+  still works. SMTP wins whenever SMTP_HOST is set.
+
   ENVIRONMENT (set in Vercel → Settings → Environment Variables)
 
     SUPABASE_URL                 https://<ref>.supabase.co
     SUPABASE_SERVICE_ROLE_KEY    the secret key — NEVER a VITE_ var
     NOTIFY_SECRET                any long random string; also in notify_config
-    RESEND_API_KEY               re_...            (omit to skip email)
+
+    SMTP_HOST                    mail.yourdomain.ie
+    SMTP_PORT                    465 (implicit TLS) or 587 (STARTTLS)
+    SMTP_USER                    the mailbox it signs in as
+    SMTP_PASS                    its password
     NOTIFY_FROM                  "PassDrivingTest <noreply@yourdomain.ie>"
-    VAPID_PUBLIC_KEY             from `npx web-push generate-vapid-keys`
-    VAPID_PRIVATE_KEY            the other half — never in the browser
+
+    RESEND_API_KEY               only if you have no SMTP server
+
+    VAPID_PUBLIC_KEY             the pair that proves a push came from here
+    VAPID_PRIVATE_KEY            never in the browser
     VAPID_SUBJECT                mailto:you@yourdomain.ie
     NOTIFY_SITE                  https://passdrivingtest.ie
   ===========================================================================
@@ -46,12 +65,23 @@
 
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import nodemailer from "nodemailer";
 
 const {
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
   NOTIFY_SECRET,
   RESEND_API_KEY,
+  SMTP_HOST,
+  SMTP_PORT = "465",
+  SMTP_USER,
+  SMTP_PASS,
+  /* Plenty of shared hosting presents a certificate for the hosting
+     provider rather than for your own domain, and nodemailer refuses it.
+     This is the escape hatch for that, off unless explicitly set — the mail
+     still travels encrypted, the name on the certificate just is not
+     checked. */
+  SMTP_ALLOW_SELF_SIGNED,
   NOTIFY_FROM = "PassDrivingTest <onboarding@resend.dev>",
   VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY,
@@ -62,6 +92,37 @@ const {
 const db = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
   : null;
+
+const smtpReady = Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
+/* Built per invocation rather than held open. A serverless instance may be
+   frozen between calls, and a pooled SMTP connection resumed after a freeze
+   is a socket the server hung up on an hour ago — which fails as a timeout
+   rather than as anything readable.
+
+   The timeouts are deliberately shorter than the function's own limit. A
+   mail server that is not answering should give up and let the push through,
+   not hold the whole invocation until Vercel kills it. */
+export function mailer() {
+  const port = Number(SMTP_PORT) || 465;
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port,
+    /* 465 is TLS from the first byte; 587 starts plain and upgrades. Getting
+       this backwards is the single most common SMTP misconfiguration and it
+       presents as a hang, not an error. */
+    secure: port === 465,
+    requireTLS: port !== 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+    tls: SMTP_ALLOW_SELF_SIGNED === "true"
+      ? { rejectUnauthorized: false }
+      : undefined,
+    pool: false,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 12000,
+  });
+}
 
 const pushReady = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
 if (pushReady) {
@@ -124,6 +185,23 @@ async function nameOf(userId) {
 /* Reads the row and decides who to tell and what to say. Returns null when
    nobody should hear about it. */
 async function compose(kind, id) {
+  /* A test send, so the setup can be proved without arranging a real
+     booking. Same secret, same code path, same server — the only thing it
+     does not exercise is the database trigger. */
+  if (kind === "test") {
+    return {
+      to: id,
+      go: "/adi",
+      subject: "Notifications are working",
+      push: { title: "Notifications are working", body: "This is a test from your portal." },
+      html: wrap("Notifications are working",
+        `<p style="margin:0;color:#334155;line-height:1.6">
+           If you are reading this, your mail server and PassDrivingTest.ie
+           are talking to each other. Nothing else needed.</p>`,
+        "Open the portal"),
+    };
+  }
+
   if (kind === "booking") {
     const { data: b } = await db.from("bookings")
       .select("id, instructor_id, learner_id, starts_at, pickup, status")
@@ -196,7 +274,7 @@ async function compose(kind, id) {
 /* ------------------------------------------------------------------------- */
 
 async function sendEmail(userId, mail) {
-  if (!RESEND_API_KEY) return { sent: false, why: "no RESEND_API_KEY" };
+  if (!smtpReady && !RESEND_API_KEY) return { sent: false, why: "no SMTP and no RESEND_API_KEY" };
 
   const { data: p } = await db.from("profiles")
     .select("email_notifications").eq("id", userId).maybeSingle();
@@ -208,6 +286,29 @@ async function sendEmail(userId, mail) {
   const to = data?.user?.email;
   if (!to) return { sent: false, why: "no address" };
 
+  /* Your own server first. See the note at the top: the domain's sending
+     reputation is already built on it. */
+  if (smtpReady) {
+    try {
+      const info = await mailer().sendMail({
+        from: NOTIFY_FROM,
+        to,
+        subject: mail.subject,
+        html: mail.html,
+        /* A plain-text alternative. Some filters score a multipart message
+           more kindly than HTML alone, and a watch or a terminal client
+           shows this instead of nothing. */
+        text: `${mail.push.title}\n\n${mail.push.body}\n\n${NOTIFY_SITE}${mail.go}`,
+      });
+      return { sent: true, via: "smtp", id: info.messageId };
+    } catch (e) {
+      /* Falls through to Resend when there is one, because a mail server
+         having a bad afternoon should not mean silence. */
+      console.error("SMTP refused:", e?.code, e?.message);
+      if (!RESEND_API_KEY) return { sent: false, why: `smtp ${e?.code || e?.message}` };
+    }
+  }
+
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${RESEND_API_KEY}`, "content-type": "application/json" },
@@ -215,7 +316,7 @@ async function sendEmail(userId, mail) {
   });
 
   if (!res.ok) return { sent: false, why: `resend ${res.status}: ${await res.text()}` };
-  return { sent: true };
+  return { sent: true, via: "resend" };
 }
 
 async function sendPush(userId, mail) {
@@ -263,6 +364,11 @@ async function sendPush(userId, mail) {
 }
 
 /* ------------------------------------------------------------------------- */
+
+/* Longer than the 10 seconds a Node function gets by default. An SMTP
+   handshake on a cold start plus a push fan-out can exceed it, and being
+   killed mid-send looks exactly like a mail server that is ignoring you. */
+export const config = { maxDuration: 30 };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
