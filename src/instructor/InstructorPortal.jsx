@@ -56,6 +56,7 @@ import { subscribeInstructor, describeChange } from "../realtime";
 import Toast from "../Toast";
 import PushToggle from "../PushToggle";
 import PushNudge from "../PushNudge";
+import IncomingBookings from "./IncomingBookings";
 import { refreshSubscription } from "../push";
 import { listLessons, listStudents, timeLabel, KIND_LABEL } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
@@ -325,6 +326,10 @@ export default function InstructorPortal({ onExitRole }) {
               draft={draft}
               onRegister={() => setRegistering(true)}
               onGo={setSection}
+              /* Answering a request from the dashboard has to move the
+                 bell, the tab badge and the icon badge, none of which
+                 this screen owns. */
+              onChanged={recount}
             />
           )
           : section === "students" ? (
@@ -448,7 +453,7 @@ function TabBar({ section, onGo, waiting }) {
    --------------------------------------------------------------------------- */
 
 function InstructorDashboard({
-  loading, status, profile, draft, onRegister, onGo,
+  loading, status, profile, draft, onRegister, onGo, onChanged,
 }) {
   const { user } = useAuth();
   const [newEnquiries, setNewEnquiries] = useState(undefined);
@@ -593,33 +598,36 @@ function InstructorDashboard({
           value={counts.students} label="Active Students"
           onClick={() => onGo("students")}
         />
+        {/* Was New Enquiries. Bookings are the thing with a clock on them:
+            an unanswered request holds an hour the instructor cannot sell
+            and a learner cannot plan around. Enquiries keep their badge on
+            the quick tile above, where a count still shows. */}
         <Stat
-          tone="violet" icon={MessageSquare}
-          value={newEnquiries} label="New Enquiries"
-          onClick={() => onGo("enquiries")}
+          tone="violet" icon={CalendarCheck}
+          value={counts.requests} label="New Bookings"
+          onClick={() => onGo("bookings")}
         />
       </div>
 
-      {/* The one thing on this screen somebody is waiting on an answer to. */}
-      {counts.requests > 0 && (
-        <button
-          onClick={() => onGo("bookings")}
-          className="mt-3 w-full text-left rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 p-4 flex items-center gap-3"
-        >
-          <CalendarCheck size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm text-slate-900 dark:text-white">
-              {counts.requests === 1
-                ? "One learner is waiting on you"
-                : `${counts.requests} learners are waiting on you`}
-            </p>
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              The hour stays held until you accept or decline.
-            </p>
-          </div>
-          <ChevronRight size={16} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
-        </button>
-      )}
+      {/* The requests themselves, answerable here.
+
+          This was a banner saying "one learner is waiting on you" with a
+          chevron into the Bookings screen. Two taps and a screen change to
+          answer a yes/no question is enough friction that answers come
+          hours later — and the learner's hour stays held for every one of
+          them. The same component the Bookings screen uses, so accept and
+          decline have one implementation, not two.
+
+          Three at most here; the rest are a tap away. */}
+      <div className="mt-3">
+        <IncomingBookings
+          limit={3}
+          heading={false}
+          onSeeAll={() => onGo("bookings")}
+          onAccepted={() => onGo("calendar")}
+          onChanged={onChanged}
+        />
+      </div>
 
       {/* Verification, while there is still something to do about it. */}
       {loading
