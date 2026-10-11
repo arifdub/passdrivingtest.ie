@@ -383,8 +383,19 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "no" });
   }
   if (!db) {
-    console.error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
-    return res.status(500).json({ error: "not configured" });
+    /* Named, now that the caller has proved it is the database. "not
+       configured" sent somebody to check all ten variables; this sends them
+       to the one. */
+    const missing = [
+      !SUPABASE_URL && "SUPABASE_URL",
+      !SUPABASE_SERVICE_ROLE_KEY && "SUPABASE_SERVICE_ROLE_KEY",
+    ].filter(Boolean);
+    console.error("Missing environment variables:", missing.join(", "));
+    return res.status(500).json({
+      error: "not configured",
+      missing,
+      hint: "Add these in Vercel > Settings > Environment Variables, then redeploy.",
+    });
   }
 
   const { kind, id } = req.body || {};
@@ -395,7 +406,15 @@ export default async function handler(req, res) {
     mail = await compose(kind, id);
   } catch (e) {
     console.error("compose failed", e);
-    return res.status(500).json({ error: "could not read the row" });
+    return res.status(500).json({
+      error: "could not read the row",
+      kind,
+      /* The message, not the stack. pg_net stores the response body, so this
+         is readable from the SQL editor without going to Vercel's logs —
+         which matters because the person debugging this is usually already
+         in the SQL editor. */
+      detail: String(e?.message || e).slice(0, 300),
+    });
   }
   if (!mail) return res.status(200).json({ sent: false, reason: "nothing to send" });
 
