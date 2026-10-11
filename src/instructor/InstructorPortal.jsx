@@ -24,7 +24,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Home, Calendar, Users, CalendarCheck, Clock, Store, Wallet, Star,
-  MessageSquare, UserCircle, Hammer, ShieldCheck, ShieldAlert, Clock3,
+  MessageSquare, UserCircle, BellRing, ShieldCheck, ShieldAlert, Clock3,
   Loader2, Pencil, Bell, ChevronRight, ChevronLeft, Plus, CalendarPlus,
   UserPlus, Zap, CalendarClock, Banknote,
 } from "lucide-react";
@@ -248,8 +248,8 @@ export default function InstructorPortal({ onExitRole }) {
       {/* ------------------------------------------------------------------ */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 text-white">
         <div
-          className="max-w-5xl mx-auto px-5 pb-5"
-          style={{ paddingTop: "max(1.25rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
+          className="max-w-5xl mx-auto px-5 pb-4"
+          style={{ paddingTop: "max(1rem, calc(env(safe-area-inset-top) + 0.6rem))" }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex items-center gap-2">
@@ -313,10 +313,13 @@ export default function InstructorPortal({ onExitRole }) {
         </div>
       </div>
 
-      {/* pb leaves room for the bar, plus whatever the home indicator takes. */}
+      {/* pb leaves room for the bar, plus whatever the home indicator takes.
+          The bar itself was trimmed (see TabBar) to give the dashboard more
+          room, so this reserve shrank with it — still clear of the bar,
+          just not by as much as it was. */}
       <div
-        className="max-w-5xl mx-auto px-5 py-5"
-        style={{ paddingBottom: "calc(6.5rem + env(safe-area-inset-bottom))" }}
+        className="max-w-5xl mx-auto px-5 pt-4"
+        style={{ paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
       >
         {section === "dashboard"
           ? (
@@ -431,9 +434,9 @@ function TabBar({ section, onGo, waiting }) {
               onClick={() => onGo(id)}
               aria-current={on ? "page" : undefined}
               aria-label={count ? `${label}, ${count} waiting` : label}
-              className="relative flex flex-col items-center gap-1 py-2.5 transition"
+              className="relative flex flex-col items-center gap-0.5 py-1.5 transition"
             >
-              <span className={`relative flex items-center justify-center w-12 h-8 rounded-full transition ${
+              <span className={`relative flex items-center justify-center w-11 h-7 rounded-full transition ${
                 on ? "bg-emerald-500/15" : ""
               }`}>
                 <Icon
@@ -470,7 +473,7 @@ function TabBar({ section, onGo, waiting }) {
    what it counts rather than just showing a bare 0.
    --------------------------------------------------------------------------- */
 
-function InstructorDashboard({
+export function InstructorDashboard({
   loading, status, profile, draft, onRegister, onGo, onChanged, pulse,
 }) {
   const { user } = useAuth();
@@ -542,12 +545,12 @@ function InstructorDashboard({
       {/* ---------------------------------------------------------------- */}
       {/* Greeting                                                         */}
       {/* ---------------------------------------------------------------- */}
-      <div className="rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white p-5 shadow-lg shadow-blue-900/20">
+      <div className="rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white p-4 shadow-lg shadow-blue-900/20">
         <p className="text-sm font-semibold text-blue-100">{greeting()},</p>
         <h2 className="text-2xl font-black tracking-tight capitalize">
           {firstName} <span className="not-italic">👋</span>
         </h2>
-        <p className="mt-1.5 text-sm text-blue-100 leading-relaxed">
+        <p className="mt-1 text-sm text-blue-100 leading-relaxed">
           {counts.today
             ? `You have ${counts.today} lesson${counts.today === 1 ? "" : "s"} on today.`
             : "Your students, lessons and bookings, all in one place."}
@@ -571,12 +574,12 @@ function InstructorDashboard({
           about 38px for a label, and "Enquiries" needs sixty — it rendered
           as "Enquirie". A 2x2 grid there is bigger to hit and reads
           properly; 360px and up gets the row of four. */}
-      <div className="mt-4 grid grid-cols-2 min-[360px]:grid-cols-4 gap-2.5">
+      <div className="mt-3 grid grid-cols-2 min-[360px]:grid-cols-4 gap-2">
         {QUICK.map(({ id, label, icon: Icon, tone }) => (
           <button
             key={id}
             onClick={() => onGo(id)}
-            className={`rounded-2xl px-1.5 py-3.5 text-white text-center transition active:scale-95 ${QUICK_TONES[tone]}`}
+            className={`rounded-2xl px-1.5 py-3 text-white text-center transition active:scale-95 ${QUICK_TONES[tone]}`}
           >
             <span className="relative inline-flex">
               <Icon size={22} />
@@ -603,7 +606,7 @@ function InstructorDashboard({
       {/* ---------------------------------------------------------------- */}
       {/* The numbers                                                      */}
       {/* ---------------------------------------------------------------- */}
-      <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+      <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
         <Stat
           tone="emerald" icon={CalendarClock}
           value={counts.today} label="Today's Lessons"
@@ -653,11 +656,11 @@ function InstructorDashboard({
 
       {/* Verification, while there is still something to do about it. */}
       {loading
-        ? <div className="mt-4"><StatusSkeleton /></div>
+        ? <div className="mt-3"><StatusSkeleton /></div>
         : status === "verified"
           ? null
           : (
-            <div className="mt-4">
+            <div className="mt-3">
               <VerificationCard
                 status={status} profile={profile} draft={draft}
                 onRegister={onRegister}
@@ -665,7 +668,7 @@ function InstructorDashboard({
             </div>
           )}
 
-      <div className="mt-4 grid md:grid-cols-2 gap-4">
+      <div className="mt-3 grid md:grid-cols-2 gap-3">
         {/* -------------------------------------------------------------- */}
         {/* Today                                                          */}
         {/* -------------------------------------------------------------- */}
@@ -752,14 +755,14 @@ function InstructorDashboard({
       {/* ---------------------------------------------------------------- */}
       {/* Money and notifications, said once                               */}
       {/* ---------------------------------------------------------------- */}
-      <div className="mt-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5">
+      <div className="mt-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4">
         <div className="flex items-center gap-2.5">
           <Banknote size={18} className="text-emerald-500 shrink-0" />
           <h2 className="font-bold text-slate-900 dark:text-white">
             Learners pay you directly
           </h2>
         </div>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
           No card is taken on this site and the platform takes nothing — not
           from your own students, not from the ones the directory sends you.
           If that ever changes you will be told here first, in advance, and it
@@ -767,18 +770,23 @@ function InstructorDashboard({
         </p>
       </div>
 
-      <div className="mt-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5">
+      {/* Was "Nothing reaches you outside the app yet", written before push
+          and email existed. Both now do — see src/badge.js, src/PushNudge
+          and api/notify.js — so the warning it gave was no longer true and
+          was left as an UNDERSTATEMENT nobody had corrected: a reader who
+          believed it would check the app out of habit rather than trust a
+          closed-phone notification that, by now, usually arrives. */}
+      <div className="mt-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4">
         <div className="flex items-center gap-2.5">
-          <Hammer size={18} className="text-amber-500 shrink-0" />
+          <BellRing size={18} className="text-emerald-500 shrink-0" />
           <h2 className="font-bold text-slate-900 dark:text-white">
-            Nothing reaches you outside the app yet
+            You'll hear about it, even with the app closed
           </h2>
         </div>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Bookings, messages and enquiries now appear the moment they arrive,
-          while this is open. What is still missing is being told when it is
-          not: no email yet, and no notification on a closed phone. So it is
-          worth a glance each morning.
+        <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          A booking, message or enquiry reaches you by push notification and
+          email, not just inside the app. If a device of yours has gone
+          quiet, check it is turned on under Account.
         </p>
       </div>
     </>
@@ -816,13 +824,13 @@ function Stat({ tone, icon: Icon, value, label, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-2xl p-3.5 text-left transition active:scale-[0.98] ${STAT_TONES[tone]}`}
+      className={`rounded-2xl p-3 text-left transition active:scale-[0.98] ${STAT_TONES[tone]}`}
     >
       <div className="flex items-start justify-between">
         <Icon size={18} />
         <ChevronRight size={14} className="opacity-50" />
       </div>
-      <p className="mt-2 text-2xl font-black tabular-nums text-slate-900 dark:text-white">
+      <p className="mt-1.5 text-2xl font-black tabular-nums text-slate-900 dark:text-white">
         {known ? value : "—"}
       </p>
       <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-tight">
@@ -834,8 +842,8 @@ function Stat({ tone, icon: Icon, value, label, onClick }) {
 
 function Panel2({ icon: Icon, title, children }) {
   return (
-    <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4">
-      <div className="flex items-center gap-2 mb-3">
+    <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3.5">
+      <div className="flex items-center gap-2 mb-2.5">
         <Icon size={17} className="text-blue-500 shrink-0" />
         <h2 className="font-black text-slate-900 dark:text-white">{title}</h2>
       </div>
