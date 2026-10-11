@@ -19,6 +19,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { CalendarCheck, Clock3, X, Loader2, MapPin, Phone, MessageSquare } from "lucide-react";
 import Thread from "./Thread";
 import { unreadByBooking } from "./socialStore";
+import { subscribeLearner } from "./realtime";
 import { myBookings, cancelBooking, slotDay, slotTime, isPast } from "./bookingStore";
 import { LESSON_LABELS, euro } from "./marketplace";
 
@@ -40,6 +41,14 @@ export default function MyBookings({ learnerId }) {
   }, [learnerId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  /* Live. A learner who has just asked for an hour sits looking at
+     "Waiting"; when the instructor accepts, the word should change under
+     them rather than on their next visit. */
+  useEffect(() => {
+    if (!learnerId) return;
+    return subscribeLearner(learnerId, () => refresh());
+  }, [learnerId, refresh]);
 
   /* Anything over is history, and history belongs somewhere else. This block
      is about what is still ahead, so it disappears entirely when nothing is —

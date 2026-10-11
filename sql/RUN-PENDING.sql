@@ -9,7 +9,7 @@
 -- so running this when some of it has already been applied is safe. If you
 -- are unsure whether 04 went in, run the lot.
 --
--- This is sql/04 through sql/17 in order. Those files remain the originals;
+-- This is sql/04 through sql/19 in order. Those files remain the originals;
 -- this one is for pasting.
 --
 -- AFTERWARDS — make yourself an admin. There is no client path to it:
@@ -3024,3 +3024,232 @@ create policy enquiry_delete on public.instructor_enquiries
     auth.uid() in (learner_id, instructor_id)
     or public.is_platform_admin()
   );
+
+-- ###########################################################################
+-- ### 18 — LIVE NOTIFICATIONS
+-- ###########################################################################
+--
+-- Supabase Realtime streams the three tables worth hearing about straight
+-- to an open browser, so the portal stops waiting two minutes to notice a
+-- booking. Row-level security still applies per subscriber: adding a table
+-- here grants nothing, it only makes what somebody could already read
+-- arrive sooner.
+
+do $$
+begin
+  if to_regclass('public.booking_messages') is null then
+    raise exception 'Run sql/13-reviews-and-messages.sql before this file.';
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 1. The publication Realtime reads
+--
+-- Created if the project has not got one. On Supabase it already exists, so
+-- this is for a self-hosted Postgres and for the test harness.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    create publication supabase_realtime;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 2. The three tables worth listening to
+--
+-- A booking request, a message, an enquiry. Each one is somebody waiting at
+-- the other end, which is exactly the set the bell already counts.
+--
+-- Lessons are deliberately absent: an instructor's own calendar changes
+-- because they changed it, and streaming your own writes back to yourself is
+-- noise.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['bookings', 'booking_messages', 'instructor_enquiries'] loop
+    -- `add table` throws if it is already in the publication, and this file
+    -- has to be re-runnable.
+    if not exists (
+      select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+      raise notice 'Realtime now streams public.%', t;
+    end if;
+
+    -- See the note at the top: without this, a filter on anything but the
+    -- primary key silently receives nothing.
+    execute format('alter table public.%I replica identity full', t);
+  end loop;
+end $$;
+
+-- ###########################################################################
+-- ### 19 — EMAIL NOTIFICATIONS
+-- ###########################################################################
+--
+-- Calls the `notify` Edge Function after the row is committed, via pg_net,
+-- so a mail provider having a bad afternoon can never fail a booking. The
+-- payload is a kind and a row id — never an address, because an endpoint
+-- that emails whoever it is asked to is an open relay with a nice URL.
+--
+-- Needs the function deployed and section 2's two values filled in. Until
+-- then it is silently off, which is the correct behaviour and not an error.
+
+do $$
+begin
+  if to_regclass('public.booking_messages') is null then
+    raise exception 'Run sql/13-reviews-and-messages.sql before this file.';
+  end if;
+end $$;
+
+-- pg_net is what makes the call non-blocking. Supabase ships it; a plain
+-- Postgres may not, and this file should still apply there — notify_async
+-- already survives its absence, so a missing extension is a warning and not
+-- a failed migration.
+do $$
+begin
+  create extension if not exists pg_net with schema extensions;
+exception when others then
+  raise notice
+    'pg_net is not available here (%). Everything else in this file applies; emails will not be sent until it is.',
+    sqlerrm;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 1. An instructor can turn these off
+--
+-- Default on, because somebody who has never seen the setting still wants to
+-- know a learner booked them. Off is one update away and the footer of every
+-- email says where.
+-- ---------------------------------------------------------------------------
+alter table public.profiles
+  add column if not exists email_notifications boolean not null default true;
+
+-- ---------------------------------------------------------------------------
+-- 2. Where to call, and the shared secret
+--
+-- PASTE YOUR VALUES HERE, then run the file. The row is readable by nobody
+-- but the server: no policy is created for it and RLS is on, so PostgREST
+-- returns nothing to any client, signed in or not.
+-- ---------------------------------------------------------------------------
+create table if not exists public.notify_config (
+  id boolean primary key default true check (id),
+  endpoint text not null,
+  secret   text not null,
+  enabled  boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.notify_config enable row level security;
+revoke all on public.notify_config from anon, authenticated;
+
+-- Replace both values. The secret must match NOTIFY_SECRET on the function.
+insert into public.notify_config (id, endpoint, secret, enabled)
+values (
+  true,
+  'https://YOUR-PROJECT-REF.supabase.co/functions/v1/notify',
+  'PASTE-THE-SAME-SECRET-YOU-SET-ON-THE-FUNCTION',
+  false   -- flip to true once both values above are real
+)
+on conflict (id) do nothing;   -- never overwrites what you have already set
+
+-- ---------------------------------------------------------------------------
+-- 3. The one place that makes the call
+-- ---------------------------------------------------------------------------
+create or replace function public.notify_async(p_kind text, p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  cfg public.notify_config%rowtype;
+begin
+  select * into cfg from public.notify_config where id;
+
+  -- Not configured yet, or deliberately off. Silent: a missing email must
+  -- never be an error on the write that triggered it.
+  if not found or not cfg.enabled or cfg.endpoint like '%YOUR-PROJECT-REF%' then
+    return;
+  end if;
+
+  perform net.http_post(
+    url     := cfg.endpoint,
+    headers := jsonb_build_object(
+                 'content-type', 'application/json',
+                 'x-notify-secret', cfg.secret
+               ),
+    body    := jsonb_build_object('kind', p_kind, 'id', p_id),
+    timeout_milliseconds := 5000
+  );
+exception when others then
+  -- pg_net missing, a bad URL, anything. The row is already written and
+  -- that is what matters.
+  raise warning 'notify_async(%, %) failed: %', p_kind, p_id, sqlerrm;
+end $$;
+
+revoke all on function public.notify_async(text, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 4. The three moments worth an email
+--
+-- A booking REQUEST, a message to the other party, a new enquiry. Not an
+-- acceptance — the learner sees that in the app and an instructor does not
+-- need emailing about their own tap.
+-- ---------------------------------------------------------------------------
+create or replace function public.notify_on_booking()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'requested' then
+    perform public.notify_async('booking', new.id);
+  end if;
+  return null;   -- AFTER trigger; the return is ignored
+end $$;
+
+drop trigger if exists bookings_notify on public.bookings;
+create trigger bookings_notify
+  after insert on public.bookings
+  for each row execute function public.notify_on_booking();
+
+create or replace function public.notify_on_message()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.notify_async('message', new.id);
+  return null;
+end $$;
+
+drop trigger if exists booking_messages_notify on public.booking_messages;
+create trigger booking_messages_notify
+  after insert on public.booking_messages
+  for each row execute function public.notify_on_message();
+
+create or replace function public.notify_on_enquiry()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.notify_async('enquiry', new.id);
+  return null;
+end $$;
+
+drop trigger if exists instructor_enquiries_notify on public.instructor_enquiries;
+create trigger instructor_enquiries_notify
+  after insert on public.instructor_enquiries
+  for each row execute function public.notify_on_enquiry();
+
+-- ---------------------------------------------------------------------------
+-- 5. Turning it on, after the function is deployed
+--
+--   update public.notify_config set
+--     endpoint = 'https://zwwtmvolghcoopicznwa.supabase.co/functions/v1/notify',
+--     secret   = '<the same NOTIFY_SECRET you set on the function>',
+--     enabled  = true;
+--
+-- And to check it is reaching anything:
+--
+--   select id, url, status_code, created
+--     from net._http_response order by created desc limit 5;
+-- ---------------------------------------------------------------------------

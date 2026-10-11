@@ -84,3 +84,41 @@ immutable
 as $$
   select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1];
 $$;
+
+-- ---------------------------------------------------------------------------
+-- pg_net, as a stub.
+--
+-- The real one queues an HTTP request and sends it after commit. There is
+-- nothing to send to here, so this records the call instead — which is what
+-- the tests actually want to assert: that a booking produces exactly one
+-- notification attempt, with the right kind and id, and that a failure to
+-- send cannot roll back the row.
+-- ---------------------------------------------------------------------------
+create schema if not exists extensions;
+create schema if not exists net;
+
+create table if not exists net._sent (
+  id bigserial primary key,
+  url text,
+  headers jsonb,
+  body jsonb,
+  created timestamptz default now()
+);
+
+create or replace function net.http_post(
+  url text,
+  body jsonb default '{}'::jsonb,
+  params jsonb default '{}'::jsonb,
+  headers jsonb default '{}'::jsonb,
+  timeout_milliseconds int default 5000
+)
+returns bigint
+language plpgsql
+as $$
+declare
+  v_id bigint;
+begin
+  insert into net._sent (url, headers, body) values (url, headers, body)
+  returning id into v_id;
+  return v_id;
+end $$;

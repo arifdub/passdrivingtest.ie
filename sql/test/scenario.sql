@@ -574,3 +574,63 @@ begin
     'a learner cannot answer on the instructor''s behalf');
 
 end $outer$;
+
+-- --------------------------------------------------------------------------
+-- Email notifications: queued, never blocking, and never an open relay
+--
+-- The shape that matters is what gets SENT to the function: a kind and a row
+-- id. Not an address. An endpoint that emails whoever it is asked to is an
+-- open relay with a nice URL, and this one is reachable from the internet —
+-- so the payload carrying no recipient is the security property, not a
+-- detail of the encoding.
+-- --------------------------------------------------------------------------
+do $outer$
+declare
+  adi constant text := '11111111-1111-1111-1111-111111111111';
+  amy constant text := '22222222-2222-2222-2222-222222222222';
+  v_booking uuid;
+  v_before  bigint;
+begin
+  perform set_config('request.jwt.claim.role', 'service_role', false);
+
+  update public.notify_config
+     set endpoint = 'https://example.supabase.co/functions/v1/notify',
+         secret = 'test-secret', enabled = true;
+
+  delete from net._sent;
+  delete from public.instructor_enquiries;
+
+  insert into public.instructor_enquiries (instructor_id, learner_id, learner_name, message)
+  values (adi::uuid, amy::uuid, 'Amy', 'hello');
+
+  perform pg_temp.report(
+    (select count(*) from net._sent where body->>'kind' = 'enquiry') = 1,
+    'a new enquiry queues exactly one email');
+
+  perform pg_temp.report(
+    (select (body->>'id') is not null and body::text not like '%@%' from net._sent limit 1),
+    'the payload carries a row id and no address');
+
+  perform pg_temp.report(
+    (select headers->>'x-notify-secret' = 'test-secret' from net._sent limit 1),
+    'and the shared secret, so the endpoint is not open to the world');
+
+  -- An accepted booking must NOT email: the instructor did that themselves.
+  select id into v_booking from public.bookings where status = 'accepted' limit 1;
+  select count(*) into v_before from net._sent;
+  update public.bookings set status = 'accepted' where id = v_booking;
+  perform pg_temp.report(
+    (select count(*) from net._sent) = v_before,
+    'accepting a booking emails nobody');
+
+  -- And a broken endpoint must not take the write down with it. A different
+  -- learner, because one open enquiry per pair is its own rule and tripping
+  -- it here would prove nothing about the notifier.
+  update public.notify_config set endpoint = 'not-a-url://nowhere';
+  perform pg_temp.expect_ok(
+    'insert into public.instructor_enquiries (instructor_id, learner_id, learner_name, message)
+       values (''' || adi || ''', ''33333333-3333-3333-3333-333333333333'', ''Ben'', ''second'')',
+    'a write still succeeds when the notifier is misconfigured');
+
+  update public.notify_config set enabled = false;
+end $outer$;

@@ -51,6 +51,8 @@ import { receivedBookings, isPast } from "../bookingStore";
 import {
   whatIsWaiting, waitingTotal, outstandingTotal, markNotificationsSeen,
 } from "../socialStore";
+import { subscribeInstructor, describeChange } from "../realtime";
+import Toast from "../Toast";
 import { listLessons, listStudents, timeLabel, KIND_LABEL } from "./teachingStore";
 import InstructorRegistration from "./InstructorRegistration";
 import { loadProfile, readDraft } from "./instructorStore";
@@ -132,6 +134,7 @@ export default function InstructorPortal({ onExitRole }) {
   const [draft, setDraft] = useState(null);
   const [loading, setLoading] = useState(true);
   const [waiting, setWaiting] = useState(null);
+  const [toast, setToast] = useState(null);
 
   /* The account's row wins; the local draft is the fallback for someone who
      started registering before signing in, or whose table isn't created yet. */
@@ -164,9 +167,28 @@ export default function InstructorPortal({ onExitRole }) {
       if (!off) setWaiting(counts);
     };
     tick();
+    /* The poll stays. Realtime below makes it live, but a websocket drops on
+       a tunnel, a lock screen, a flaky 3G — and the one thing worse than a
+       two-minute delay is a count that is wrong until the app is restarted.
+       Belt and braces, and the braces are cheap. */
     const id = setInterval(tick, 120000);
     return () => { off = true; clearInterval(id); };
   }, [user?.id, section]);
+
+  /* Live: a booking, a message or an enquiry arriving re-reads the counts
+     and says so, instead of the screen sitting on a stale number for up to
+     two minutes while the instructor watches it. */
+  useEffect(() => {
+    if (!user?.id) return;
+    return subscribeInstructor(user.id, (change) => {
+      recount();
+      const said = describeChange(change);
+      /* Not everything is worth a line — accepting a booking is an update to
+         a booking, and telling somebody about the thing they just did is how
+         a notification system teaches people to ignore it. */
+      if (said) setToast(said);
+    });
+  }, [user?.id, recount]);
 
   const status = profile?.verification_status
     || (draft ? "draft" : null);
@@ -309,6 +331,12 @@ export default function InstructorPortal({ onExitRole }) {
             )
           : null}
       </div>
+
+      <Toast
+        message={toast}
+        onGo={() => toast?.go && setSection(toast.go)}
+        onDismiss={() => setToast(null)}
+      />
 
       <TabBar section={section} onGo={setSection} waiting={waiting} />
     </div>
@@ -679,10 +707,10 @@ function InstructorDashboard({
           </h2>
         </div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          Every part of this portal works. What is missing is being told: no
-          email when a learner books, and no notification on your phone. Until
-          that exists the only way to find a new request is to open this and
-          look, so it is worth a glance each morning.
+          Bookings, messages and enquiries now appear the moment they arrive,
+          while this is open. What is still missing is being told when it is
+          not: no email yet, and no notification on a closed phone. So it is
+          worth a glance each morning.
         </p>
       </div>
     </>
@@ -1029,10 +1057,13 @@ function NotificationBell({ counts, onGo, onSeen }) {
               </>
             )}
 
+            {/* Accurate about what changed and what did not. This is live
+                now — but live is not push, and a badge that updates by
+                itself invites the belief that a closed phone will buzz. */}
             <p className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              This only updates while the app is open. Your phone won't buzz
-              when a booking comes in — that needs push notifications, which
-              aren't built yet.
+              This updates the moment something arrives, as long as the app is
+              open. Your phone won't buzz with it closed — that needs push
+              notifications, which aren't built yet.
             </p>
           </div>
       )}
