@@ -188,6 +188,66 @@ export function openSlots({
 }
 
 /* ------------------------------------------------------------------------- */
+/* The hourly picker                                                         */
+/*                                                                            */
+/* Typing a from/to time to carve an hour out of the middle of a day — "I'm   */
+/* working 9 to 5 except not 15:00 to 16:00" — is more arithmetic than that   */
+/* exception is worth. This turns a day into on/off hours instead: tap an    */
+/* hour to flip it, and the two functions below convert between that and the */
+/* same starts_at/ends_at blocks every other part of this file reads.        */
+/* ------------------------------------------------------------------------- */
+
+export const HOUR_GRID_START = 6;   // the grid opens at 06:00
+export const HOUR_GRID_END = 22;    // and its last tile is 21:00–22:00
+
+/* The grid always spans at least the default range, and stretches to fit any
+   block that already starts earlier or ends later — an instructor with a
+   05:00 start should not have it silently dropped because the grid began
+   at 6. */
+export function hourGridRange(blocks) {
+  let start = HOUR_GRID_START, end = HOUR_GRID_END;
+  for (const b of blocks || []) {
+    const from = toMinutes(b.starts_at), to = toMinutes(b.ends_at);
+    if (from !== null) start = Math.min(start, Math.floor(from / 60));
+    if (to !== null) end = Math.max(end, Math.ceil(to / 60));
+  }
+  return { start, end };
+}
+
+/* Which whole hours in [start, end) a set of blocks covers. An hour counts
+   as on only when some block covers it completely — a block built with the
+   old from/to form that starts or ends mid-hour leaves that one hour off,
+   which is the safer direction: toggling it back on here rounds the block
+   outward instead of a save silently shrinking it. */
+export function blocksToHourSet(blocks, start = HOUR_GRID_START, end = HOUR_GRID_END) {
+  const on = new Set();
+  for (let h = start; h < end; h++) {
+    const covered = (blocks || []).some(b => {
+      const from = toMinutes(b.starts_at), to = toMinutes(b.ends_at);
+      return from !== null && to !== null && from <= h * 60 && to >= (h + 1) * 60;
+    });
+    if (covered) on.add(h);
+  }
+  return on;
+}
+
+/* The reverse: contiguous on-hours become one block each, so an evening
+   split by a lunch hour comes back as two blocks rather than hourly ones. */
+export function hourSetToBlocks(hourSet) {
+  const hours = [...hourSet].sort((a, b) => a - b);
+  const blocks = [];
+  for (const h of hours) {
+    const last = blocks[blocks.length - 1];
+    if (last && toMinutes(last.ends_at) === h * 60) {
+      last.ends_at = fromMinutes((h + 1) * 60);
+    } else {
+      blocks.push({ starts_at: fromMinutes(h * 60), ends_at: fromMinutes((h + 1) * 60) });
+    }
+  }
+  return blocks;
+}
+
+/* ------------------------------------------------------------------------- */
 /* Database                                                                   */
 /* ------------------------------------------------------------------------- */
 
@@ -271,6 +331,32 @@ export async function replaceWeek(instructorId, blocks) {
     blocks.map(b => ({
       instructor_id: instructorId,
       weekday: Number(b.weekday),
+      starts_at: b.starts_at,
+      ends_at: b.ends_at,
+    }))
+  );
+  return error ? { ok: false, error: error.message } : { ok: true, error: null };
+}
+
+/* Replaces one weekday's hours with exactly the blocks given — including
+   none, which is how the hourly picker says "not working" for that day.
+   Delete-then-insert, scoped to the one weekday, for the same reason
+   replaceWeek does it for the whole week: a handful of rows is cheaper to
+   replace outright than to diff correctly. */
+export async function setDayHours(instructorId, weekday, blocks) {
+  if (!HAS_SUPABASE || !instructorId) return no();
+
+  const { error: cleared } = await supabase
+    .from("instructor_hours").delete()
+    .eq("instructor_id", instructorId).eq("weekday", Number(weekday));
+  if (cleared) return { ok: false, error: cleared.message };
+
+  if (!blocks.length) return { ok: true, error: null };
+
+  const { error } = await supabase.from("instructor_hours").insert(
+    blocks.map(b => ({
+      instructor_id: instructorId,
+      weekday: Number(weekday),
       starts_at: b.starts_at,
       ends_at: b.ends_at,
     }))

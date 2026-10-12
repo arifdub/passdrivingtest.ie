@@ -47,7 +47,7 @@ vi.mock("../instructor/availabilityStore", async (importOriginal) => {
   };
 });
 
-const { default: Availability, Preview, Rules } = await import("../instructor/Availability");
+const { default: Availability, Preview, Rules, HourGrid } = await import("../instructor/Availability");
 const { default: Account } = await import("../instructor/Account");
 
 const profile = {
@@ -159,5 +159,31 @@ describe("Availability", () => {
     expect(selected).toContain("90 min");
     expect(selected).toContain("None");
     expect(selected).not.toContain("1 hour");
+  });
+
+  describe("the hourly picker", () => {
+    it("opens with the day's existing hours already switched on", () => {
+      const html = renderToString(
+        <HourGrid
+          blocks={[{ starts_at: "09:00", ends_at: "13:00" }]}
+          onSave={() => {}}
+          onClose={() => {}}
+        />
+      );
+      /* aria-pressed is how a screen reader hears "on" — asserted on the
+         attribute rather than a colour class, which a redesign could change
+         without the picker's actual state changing. */
+      expect(html).toContain('aria-pressed="true"');
+      expect(html).toContain('aria-pressed="false"');
+    });
+
+    it("offers every hour switched off for a day marked not working", () => {
+      const html = renderToString(
+        <HourGrid blocks={[]} onSave={() => {}} onClose={() => {}} />
+      );
+      expect(html).not.toContain('aria-pressed="true"');
+      /* 06:00 to 22:00, the default range, is sixteen tiles. */
+      expect([...html.matchAll(/aria-pressed="false"/g)]).toHaveLength(16);
+    });
   });
 });

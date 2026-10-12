@@ -21,17 +21,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Clock, Plus, Trash2, Loader2, AlertCircle, Palmtree, Sparkles,
-  CalendarRange, PauseCircle, PlayCircle,
+  CalendarRange, PauseCircle, PlayCircle, ChevronUp,
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import { PrimaryButton, SecondaryButton } from "../ui";
 import { Sheet, Field, Label } from "./Students";
 import { listLessons } from "./teachingStore";
 import {
-  loadAvailability, addHours, removeHours, replaceWeek,
+  loadAvailability, addHours, removeHours, replaceWeek, setDayHours,
   addTimeOff, removeTimeOff, saveRules,
   WEEKDAYS, WEEK_ORDER, TYPICAL_WEEK, DEFAULT_RULES,
   hoursLabel, weeklyHours, openSlots, dateKey,
+  hourGridRange, blocksToHourSet, hourSetToBlocks,
 } from "./availabilityStore";
 
 const DAY = Object.fromEntries(WEEKDAYS.map(d => [d.id, d]));
@@ -47,6 +48,7 @@ export default function Availability() {
   const [error, setError] = useState(null);
   const [addingFor, setAddingFor] = useState(null);   // a weekday id
   const [addingOff, setAddingOff] = useState(false);
+  const [expandedDay, setExpandedDay] = useState(null); // a weekday id, for the hourly picker
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -152,49 +154,83 @@ export default function Availability() {
       <div className="mt-3 space-y-2">
         {WEEK_ORDER.map(id => {
           const blocks = hours.filter(h => h.weekday === id);
+          const expanded = expandedDay === id;
           return (
             <div
               key={id}
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 flex items-start gap-3"
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5"
             >
-              <p className="w-11 shrink-0 pt-0.5 text-xs font-bold uppercase tracking-widest text-slate-400">
-                {DAY[id].short}
-              </p>
+              <div className="flex items-start gap-3">
+                <p className="w-11 shrink-0 pt-0.5 text-xs font-bold uppercase tracking-widest text-slate-400">
+                  {DAY[id].short}
+                </p>
 
-              <div className="flex-1 min-w-0">
-                {blocks.length ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {blocks.map(b => (
-                      <span
-                        key={b.id}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 px-2 py-1 text-xs font-bold tabular-nums"
-                      >
-                        {hoursLabel(b)}
-                        <button
-                          onClick={async () => {
-                            const { ok, error: e } = await removeHours(b.id);
-                            if (ok) refresh(); else setError(e);
-                          }}
-                          aria-label={`Remove ${DAY[id].long} ${hoursLabel(b)}`}
-                          className="text-emerald-600/60 dark:text-emerald-400/60 hover:text-red-500"
+                <div className="flex-1 min-w-0">
+                  {blocks.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {blocks.map(b => (
+                        <span
+                          key={b.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 px-2 py-1 text-xs font-bold tabular-nums"
                         >
-                          <Trash2 size={12} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400 pt-1">Not working</p>
-                )}
+                          {hoursLabel(b)}
+                          <button
+                            onClick={async () => {
+                              const { ok, error: e } = await removeHours(b.id);
+                              if (ok) refresh(); else setError(e);
+                            }}
+                            aria-label={`Remove ${DAY[id].long} ${hoursLabel(b)}`}
+                            className="text-emerald-600/60 dark:text-emerald-400/60 hover:text-red-500"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 pt-1">Not working</p>
+                  )}
+                </div>
+
+                {/* The hourly picker is the main way in now — pick and
+                    choose which hours of a working day to skip, like a
+                    3–4pm gap, without typing two from/to blocks around it.
+                    The + sheet stays for a block the grid can't express
+                    (a half-hour start, say), reachable right next to it. */}
+                <button
+                  onClick={() => setExpandedDay(expanded ? null : id)}
+                  aria-label={expanded
+                    ? `Close the hourly picker for ${DAY[id].long}`
+                    : `Pick hours on ${DAY[id].long}`}
+                  aria-expanded={expanded}
+                  className={`shrink-0 rounded-lg border p-1.5 ${
+                    expanded
+                      ? "border-emerald-400 text-emerald-600 dark:text-emerald-400"
+                      : "border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300"
+                  }`}
+                >
+                  {expanded ? <ChevronUp size={14} /> : <Clock size={14} />}
+                </button>
+                <button
+                  onClick={() => setAddingFor(id)}
+                  aria-label={`Add a specific time block on ${DAY[id].long}`}
+                  className="shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 p-1.5"
+                >
+                  <Plus size={14} />
+                </button>
               </div>
 
-              <button
-                onClick={() => setAddingFor(id)}
-                aria-label={`Add hours on ${DAY[id].long}`}
-                className="shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 p-1.5"
-              >
-                <Plus size={14} />
-              </button>
+              {expanded && (
+                <HourGrid
+                  blocks={blocks}
+                  onSave={async (newBlocks) => {
+                    const { ok, error: e } = await setDayHours(user?.id, id, newBlocks);
+                    if (ok) { setExpandedDay(null); refresh(); }
+                    return { ok, error: e };
+                  }}
+                  onClose={() => setExpandedDay(null)}
+                />
+              )}
             </div>
           );
         })}
@@ -459,6 +495,76 @@ export function Preview({ hours, timeOff, rules, lessons }) {
 }
 
 /* ------------------------------------------------------------------------- */
+
+/* Available/not-available, one hour at a time, for a single day. Opens
+   already set from whatever blocks that day has; saving turns the on-hours
+   back into blocks (hourSetToBlocks) and replaces the day's hours outright,
+   so clearing every tile is how "not working" gets said from here. */
+export function HourGrid({ blocks, onSave, onClose }) {
+  const { start, end } = hourGridRange(blocks);
+  const [on, setOn] = useState(() => blocksToHourSet(blocks, start, end));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const toggle = (h) => setOn(prev => {
+    const next = new Set(prev);
+    if (next.has(h)) next.delete(h); else next.add(h);
+    return next;
+  });
+
+  return (
+    <div className="mt-3.5 pt-3.5 border-t border-slate-100 dark:border-slate-700">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Tap an hour to mark it available or not, then save.
+      </p>
+
+      <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+        {Array.from({ length: end - start }, (_, i) => start + i).map(h => {
+          const active = on.has(h);
+          return (
+            <button
+              key={h}
+              onClick={() => toggle(h)}
+              aria-pressed={active}
+              className={`rounded-lg py-2 text-[11px] font-bold tabular-nums transition ${
+                active
+                  ? "bg-emerald-500 text-slate-900"
+                  : "bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
+              }`}
+            >
+              {String(h).padStart(2, "0")}–{String(h + 1).padStart(2, "0")}
+            </button>
+          );
+        })}
+      </div>
+
+      {error && (
+        <p className="mt-3 text-sm text-red-500 flex items-start gap-1.5">
+          <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}
+        </p>
+      )}
+
+      <div className="mt-3.5 flex gap-2">
+        <div className="flex-1">
+          <PrimaryButton
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true); setError(null);
+              const r = await onSave(hourSetToBlocks(on));
+              setBusy(false);
+              if (!r.ok) setError(r.error);
+            }}
+          >
+            {busy ? "Saving…" : "Save hours"}
+          </PrimaryButton>
+        </div>
+        <div className="flex-1">
+          <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AddHoursSheet({ weekday, onClose, onSave }) {
   const [from, setFrom] = useState("09:00");

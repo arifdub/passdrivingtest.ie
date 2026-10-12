@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import {
   toMinutes, fromMinutes, trimTime, blockHours, weeklyHours, overlaps,
   dateKey, isDayOff, openSlots, DEFAULT_RULES, TYPICAL_WEEK, WEEK_ORDER,
+  hourGridRange, blocksToHourSet, hourSetToBlocks,
 } from "../instructor/availabilityStore";
 
 /* 2026-10-13 is a Tuesday. getDay() === 2. */
@@ -159,6 +160,62 @@ describe("open slots", () => {
       rules: { ...DEFAULT_RULES, min_notice_hours: 0, travel_buffer_minutes: 0, lesson_minutes: 90 },
     }).map(s => s.time);
     expect(slots).toEqual(["09:00", "09:30"]);
+  });
+});
+
+describe("the hourly picker", () => {
+  it("marks an hour on only when a block covers it completely", () => {
+    const nineToFive = [{ starts_at: "09:00", ends_at: "17:00" }];
+    const on = blocksToHourSet(nineToFive, 6, 22);
+    expect(on.has(9)).toBe(true);
+    expect(on.has(16)).toBe(true);     // the 16:00–17:00 tile
+    expect(on.has(17)).toBe(false);    // nothing covers 17:00–18:00
+    expect(on.has(8)).toBe(false);
+  });
+
+  it("leaves an hour off when a block only partly covers it", () => {
+    /* A block built with the old from/to sheet can start mid-hour. Rounding
+       that hour "on" here would let a save silently stretch the block to a
+       full hour nobody asked to work. */
+    const half = [{ starts_at: "09:30", ends_at: "17:00" }];
+    expect(blocksToHourSet(half, 6, 22).has(9)).toBe(false);
+    expect(blocksToHourSet(half, 6, 22).has(10)).toBe(true);
+  });
+
+  it("the default grid spans 06:00–22:00", () => {
+    expect(hourGridRange([])).toEqual({ start: 6, end: 22 });
+  });
+
+  it("stretches the grid to fit a block outside the default range", () => {
+    expect(hourGridRange([{ starts_at: "05:00", ends_at: "23:00" }]))
+      .toEqual({ start: 5, end: 23 });
+  });
+
+  it("merges contiguous on-hours into one block", () => {
+    const blocks = hourSetToBlocks(new Set([9, 10, 11, 12]));
+    expect(blocks).toEqual([{ starts_at: "09:00", ends_at: "13:00" }]);
+  });
+
+  it("keeps a gap in the middle of the day as two blocks — the 3–4pm case", () => {
+    /* 9 to 5 with 15:00–16:00 switched off. */
+    const hours = [9, 10, 11, 12, 13, 14, 16].reduce((s, h) => s.add(h), new Set());
+    expect(hourSetToBlocks(hours)).toEqual([
+      { starts_at: "09:00", ends_at: "15:00" },
+      { starts_at: "16:00", ends_at: "17:00" },
+    ]);
+  });
+
+  it("says not working when nothing is on", () => {
+    expect(hourSetToBlocks(new Set())).toEqual([]);
+  });
+
+  it("round-trips a split day through the grid and back", () => {
+    const split = [
+      { starts_at: "09:00", ends_at: "13:00" },
+      { starts_at: "14:00", ends_at: "17:00" },
+    ];
+    const on = blocksToHourSet(split, 6, 22);
+    expect(hourSetToBlocks(on)).toEqual(split);
   });
 });
 
