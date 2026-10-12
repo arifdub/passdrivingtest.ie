@@ -24,9 +24,9 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Home, Calendar, Users, CalendarCheck, Clock, Store, Wallet, Star,
-  MessageSquare, UserCircle, BellRing, ShieldCheck, ShieldAlert, Clock3,
+  MessageSquare, UserCircle, ShieldCheck, ShieldAlert, Clock3,
   Loader2, Pencil, Bell, ChevronRight, ChevronLeft, Plus, CalendarPlus,
-  UserPlus, Zap, CalendarClock, Banknote, LogOut, GraduationCap,
+  UserPlus, Zap, CalendarClock, LogOut, GraduationCap, HelpCircle,
 } from "lucide-react";
 import {
   PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge, useDismiss,
@@ -49,6 +49,7 @@ import Earnings from "./Earnings";
 import Reviews from "./Reviews";
 import Messages from "./Messages";
 import Account from "./Account";
+import Help from "./Help";
 import { receivedEnquiries } from "../marketplace";
 import { receivedBookings, isPast } from "../bookingStore";
 import {
@@ -112,7 +113,7 @@ const TITLES = {
   students: "Students", calendar: "Calendar", account: "Account",
   enquiries: "Enquiries", bookings: "Bookings", availability: "Availability",
   marketplace: "Marketplace", earnings: "Earnings", reviews: "Reviews",
-  messages: "Messages",
+  messages: "Messages", help: "Help",
 };
 
 const BLURBS = {
@@ -126,6 +127,7 @@ const BLURBS = {
   reviews: "What your students said.",
   messages: "Talk to a student about a lesson.",
   account: "Your details and verification.",
+  help: "How the portal works.",
 };
 
 
@@ -344,6 +346,7 @@ export default function InstructorPortal({ onExitRole }) {
                    where the bar no longer has room. */
                 actions={[
                   { label: "Edit profile", icon: Pencil, onClick: () => setSection("account") },
+                  { label: "Help", icon: HelpCircle, onClick: () => setSection("help") },
                 ]}
                 portals={portalsFor({ accountRoles, isAdminAccount, here: "instructor" })}
                 onSwitch={onExitRole}
@@ -411,6 +414,7 @@ export default function InstructorPortal({ onExitRole }) {
           : section === "earnings" ? <Earnings />
           : section === "reviews" ? <Reviews />
           : section === "messages" ? <Messages onRead={recount} />
+          : section === "help" ? <Help />
           : section === "account" ? (
               <Account
                 loading={loading}
@@ -644,9 +648,6 @@ export function InstructorDashboard({
         ))}
       </div>
 
-      {/* The address learners book from without an account. */}
-      <ShareLink profile={profile} />
-
       {/* ---------------------------------------------------------------- */}
       {/* The numbers                                                      */}
       {/* ---------------------------------------------------------------- */}
@@ -789,43 +790,11 @@ export function InstructorDashboard({
         ))}
       </div>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Money and notifications, said once                               */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="mt-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4">
-        <div className="flex items-center gap-2.5">
-          <Banknote size={18} className="text-emerald-500 shrink-0" />
-          <h2 className="font-bold text-slate-900 dark:text-white">
-            Learners pay you directly
-          </h2>
-        </div>
-        <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          No card is taken on this site and the platform takes nothing — not
-          from your own students, not from the ones the directory sends you.
-          If that ever changes you will be told here first, in advance, and it
-          will not apply to anything already booked.
-        </p>
-      </div>
-
-      {/* Was "Nothing reaches you outside the app yet", written before push
-          and email existed. Both now do — see src/badge.js, src/PushNudge
-          and api/notify.js — so the warning it gave was no longer true and
-          was left as an UNDERSTATEMENT nobody had corrected: a reader who
-          believed it would check the app out of habit rather than trust a
-          closed-phone notification that, by now, usually arrives. */}
-      <div className="mt-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4">
-        <div className="flex items-center gap-2.5">
-          <BellRing size={18} className="text-emerald-500 shrink-0" />
-          <h2 className="font-bold text-slate-900 dark:text-white">
-            You'll hear about it, even with the app closed
-          </h2>
-        </div>
-        <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          A booking, message or enquiry reaches you by push notification and
-          email, not just inside the app. If a device of yours has gone
-          quiet, check it is turned on under Account.
-        </p>
-      </div>
+      {/* The address learners book from without an account. Last on the
+          page: it is set up once and shared now and then, not daily work.
+          How it works, and the payments and notifications explainers that
+          used to sit here, are under Help in the account menu. */}
+      <ShareLink profile={profile} />
     </>
   );
 }

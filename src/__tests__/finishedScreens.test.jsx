@@ -16,6 +16,7 @@ vi.mock("../appAuth", () => ({
 
 const { default: Marketplace } = await import("../instructor/Marketplace");
 const { InstructorDashboard, VerificationGate } = await import("../instructor/InstructorPortal");
+const { default: Help, TOPICS: HelpTopics } = await import("../instructor/Help");
 const { default: Earnings } = await import("../instructor/Earnings");
 const { default: Reviews, Stars } = await import("../instructor/Reviews");
 const { default: Messages } = await import("../instructor/Messages");
@@ -36,49 +37,47 @@ describe("they render at all", () => {
   });
 });
 
-/* InstructorDashboard has no top-level test elsewhere. It carries two
-   static panels (money, and notification reach) that were rewritten in
-   this change, and a tab bar icon (BellRing) swapped in for one that was
-   dropped — the exact shape of bug this project has hit before: an icon
-   referenced in JSX but not imported builds clean and only throws when
-   the component actually renders. useEffect does not run under
-   renderToString, so this only proves the synchronous render is sound,
-   not the data-dependent states — which is what the rest of this file's
-   "begins in a loading state" caveat already says about every screen
-   here. */
+/* InstructorDashboard has no top-level test elsewhere. useEffect does not
+   run under renderToString, so this only proves the synchronous render is
+   sound — an icon referenced but not imported builds clean and only throws
+   when the component renders, which this catches. */
 describe("the instructor dashboard", () => {
-  /* loading/status/draft/onRegister used to be props here, when the
-     dashboard still carried its own VerificationCard for an unverified
-     instructor. That branch moved to VerificationGate, which the whole
-     portal now shows INSTEAD of this component when the account is not
-     verified — so this component is only ever mounted already-verified,
-     and those props went with it. Left off deliberately, not by oversight. */
-  it("renders, including both static panels", () => {
-    const html = renderToString(
-      <InstructorDashboard
-        profile={{ full_name: "Aoife" }}
-        onGo={() => {}}
-        onChanged={() => {}}
-        pulse=""
-      />,
-    );
-    expect(html).toContain("Learners pay you directly");
-    expect(html).toContain("hear about it, even with the app closed");
+  const render = () => renderToString(
+    <InstructorDashboard
+      profile={{ full_name: "Aoife", adi_number: "40953", listed: true }}
+      onGo={() => {}}
+      onChanged={() => {}}
+      pulse=""
+    />,
+  );
+
+  it("renders, with the booking page link as the last thing on it", () => {
+    const html = render();
+    expect(html).toContain("Your booking page");
+    /* Last: set up once, shared now and then. Nothing after it but the
+       closing markup. */
+    expect(html.lastIndexOf("Your booking page")).toBeGreaterThan(html.lastIndexOf("Profile &amp; account"));
   });
 
-  it("no longer claims notifications do not exist", () => {
-    /* The panel this replaced said "no email yet, and no notification on
-       a closed phone" — true when it was written, false since push and
-       email shipped. Asserted as an absence so a future regression (the
-       text sliding back to its old wording) is caught rather than merely
-       the panel's presence. */
-    const html = renderToString(
-      <InstructorDashboard
-        profile={{}} onGo={() => {}} onChanged={() => {}} pulse=""
-      />,
-    );
-    expect(html).not.toContain("no email yet");
-    expect(html).not.toContain("Nothing reaches you outside the app yet");
+  it("keeps explanations off it — they are under Help now", () => {
+    const html = render();
+    expect(html).not.toContain("Learners pay you directly");
+    expect(html).not.toContain("even with the app closed");
+  });
+});
+
+describe("help", () => {
+  it("carries what the dashboard used to explain", () => {
+    const text = HelpTopics.map(t => t.body.join(" ")).join(" ");
+    expect(text).toContain("Learners pay you directly");
+    expect(text).toContain("even with the app closed");
+    expect(text).toContain("passdrivingtest.ie/adi/");
+  });
+
+  it("renders with the first topic open", () => {
+    const html = renderToString(<Help />);
+    expect(html).toContain("Your booking page");
+    expect(html).toContain('aria-expanded="true"');
   });
 });
 
