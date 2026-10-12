@@ -21,7 +21,7 @@
 //      big files, and those are safe to cache forever because their names
 //      change whenever their contents do.
 
-const SW_VERSION = "v3-no-cache";
+const SW_VERSION = "v4-navigations-only";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -58,8 +58,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Everything else passes straight through, uncached.
-  event.respondWith(fetch(request));
+  // Everything else is left alone — no respondWith, so the browser fetches it
+  // itself, exactly as if there were no worker. It used to be re-fetched here
+  // "uncached", which changed nothing for a normal request but put the worker
+  // in the path of the home-screen icon, where iOS's separate fetch for the
+  // Add to Home Screen step could come back empty and leave a letter tile.
 });
 
 // Lets the app tell a waiting worker to take over immediately.
@@ -92,8 +95,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "PassDrivingTest";
   const options = {
     body: data.body || "Something is waiting in your portal.",
-    icon: "/adi-icon-192-v2.png",
-    badge: "/adi-icon-192-v2.png",
+    icon: "/instructor-icon-192.png",
+    badge: "/instructor-icon-192.png",
     // Collapses repeats: three messages in a thread replace each other
     // rather than stacking three identical banners.
     tag: data.tag || "pdt-notify",
