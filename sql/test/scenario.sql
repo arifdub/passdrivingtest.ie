@@ -207,6 +207,13 @@ begin
     not exists (select 1 from public.open_slots(adi, current_date + 5, 1) s where s.slot = pg_temp.slot(11)),
     'open_slots withholds the taken 11:00');
   perform pg_temp.report(
+    -- The 60-minute lesson length from this instructor's own rules steps
+    -- the candidates, so a 9-to-5 day offers 09:00, 10:00, 11:00… and never
+    -- 09:30 — a start that would run a lesson into the 10 o'clock hour
+    -- nobody picked as its own block.
+    not exists (select 1 from public.open_slots(adi, current_date + 5, 1) s where s.slot = pg_temp.slot(9, 5, 30)),
+    'open_slots steps by the lesson length, not a fixed half hour');
+  perform pg_temp.report(
     not exists (select 1 from public.open_slots(adi, current_date + 5, 1) s where s.slot = pg_temp.slot(22, 5, 30)),
     'open_slots withholds 22:30, which would overrun');
   perform pg_temp.report(

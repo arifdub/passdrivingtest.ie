@@ -84,6 +84,19 @@ describe("open slots", () => {
     expect(slots.some(s => s.time === "16:30")).toBe(false);
   });
 
+  it("steps by the lesson length, not by a fixed half hour", () => {
+    /* The bug this guards: an instructor picks hours one at a time — 9 to
+       10, 10 to 11 — on a 60-minute lesson, and a learner was offered 09:30
+       as well, a start time that runs into the next hour the instructor
+       never agreed to as a block. One candidate per hour is the whole of
+       what "9 to 5, hour lessons" means. */
+    const slots = openSlots({ date: TUE, hours: nineToFive, rules: bare, now: TUE_MORNING })
+      .map(s => s.time);
+    expect(slots).toEqual([
+      "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00",
+    ]);
+  });
+
   it("offers nothing on a day the instructor does not work", () => {
     const wed = new Date(2026, 9, 14);
     expect(openSlots({ date: wed, hours: nineToFive, rules: bare, now: TUE_MORNING })).toEqual([]);
@@ -148,9 +161,12 @@ describe("open slots", () => {
       { weekday: 2, starts_at: "09:00", ends_at: "11:00" },
       { weekday: 2, starts_at: "14:00", ends_at: "16:00" },
     ];
+    /* `bare` carries the default 60-minute lesson, and the step now follows
+       it: one candidate an hour, not a 30-minute offer that would start a
+       lesson at 09:30 and run past the hour someone actually picked. */
     const slots = openSlots({ date: TUE, hours: split, rules: bare, now: TUE_MORNING })
       .map(s => s.time);
-    expect(slots).toEqual(["09:00", "09:30", "10:00", "14:00", "14:30", "15:00"]);
+    expect(slots).toEqual(["09:00", "10:00", "14:00", "15:00"]);
   });
 
   it("uses the instructor's own lesson length", () => {
@@ -159,7 +175,17 @@ describe("open slots", () => {
       now: TUE_MORNING,
       rules: { ...DEFAULT_RULES, min_notice_hours: 0, travel_buffer_minutes: 0, lesson_minutes: 90 },
     }).map(s => s.time);
-    expect(slots).toEqual(["09:00", "09:30"]);
+    /* A 90-minute lesson in a two-hour block has room for exactly one —
+       09:00 to 10:30, with only half an hour left over, nowhere near
+       another 90 minutes. */
+    expect(slots).toEqual(["09:00"]);
+  });
+
+  it("can still be asked for 30-minute offers explicitly, overriding the lesson length", () => {
+    const slots = openSlots({
+      date: TUE, hours: nineToFive, rules: bare, now: TUE_MORNING, step: 30,
+    }).map(s => s.time);
+    expect(slots).toContain("09:30");
   });
 });
 

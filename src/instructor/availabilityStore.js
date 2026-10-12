@@ -148,15 +148,22 @@ export function nextDateFor(weekday, from = new Date()) {
    length in either direction.
 
    `now` and `rules` decide what is too soon and too far out. Passing `now`
-   in rather than reading the clock is what makes this testable. */
+   in rather than reading the clock is what makes this testable.
+
+   `step` defaults to the lesson length itself, not some fixed interval. A
+   60-minute lesson in a 9-to-5 day offers 9, 10, 11… — one candidate per
+   hour, the same granularity the hourly picker sets hours in — rather than
+   also offering 9:30, which nothing about a 9-to-5 day with hour lessons
+   actually means. */
 export function openSlots({
   date, hours = [], lessons = [], timeOff = [],
-  rules = DEFAULT_RULES, now = new Date(), step = 30,
+  rules = DEFAULT_RULES, now = new Date(), step,
 }) {
   const key = dateKey(date);
   if (isDayOff(key, timeOff)) return [];
 
   const lessonMins = rules.lesson_minutes || DEFAULT_RULES.lesson_minutes;
+  const stepMins = step || lessonMins;
   const buffer = rules.travel_buffer_minutes ?? DEFAULT_RULES.travel_buffer_minutes;
 
   const earliest = new Date(now.getTime() + (rules.min_notice_hours ?? 0) * 3600000);
@@ -186,7 +193,7 @@ export function openSlots({
     const to = toMinutes(block.ends_at);
     if (from === null || to === null) continue;
 
-    for (let m = from; m + lessonMins <= to; m += step) {
+    for (let m = from; m + lessonMins <= to; m += stepMins) {
       if (taken.some(t => m < t.to && m + lessonMins > t.from)) continue;
 
       const at = new Date(date);
