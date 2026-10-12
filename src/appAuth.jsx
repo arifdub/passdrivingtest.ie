@@ -24,7 +24,7 @@
 */
 
 import React, {
-  createContext, useContext, useState, useEffect, useCallback, useMemo,
+  createContext, useContext, useState, useEffect, useCallback, useMemo, useRef,
 } from "react";
 import { supabase, HAS_SUPABASE, SUPABASE_HOST } from "./supabaseClient";
 
@@ -67,6 +67,45 @@ function localUserId(email) {
 }
 
 /* -------------------------------------------------------------------------
+   Password reset by code — the sequence, apart from React so it can be
+   tested against a stand-in client.
+
+   A code is single-use, so once accepted a rejected password (too short,
+   same as the old one) is retried WITHOUT the code. While the code's
+   session exists but the password is unsaved, holdSession keeps
+   onAuthStateChange from letting the person into the app.
+   ------------------------------------------------------------------------- */
+export async function runResetWithCode({
+  auth, holdSession, verifiedFor, email, code, password, describe = e => e?.message,
+}) {
+  const addr = email.trim().toLowerCase();
+  holdSession.current = true;
+
+  if (verifiedFor.current !== addr) {
+    const { error: err } = await auth.verifyOtp({
+      email: addr, token: String(code).trim(), type: "recovery",
+    });
+    if (err) {
+      holdSession.current = false;
+      return {
+        ok: false,
+        error: /expired|invalid|otp|token/i.test(err.message || "")
+          ? "That code is wrong or has expired. Use the code in the newest email, or send a new one."
+          : describe(err),
+      };
+    }
+    verifiedFor.current = addr;
+  }
+
+  const { data, error: err } = await auth.updateUser({ password });
+  if (err) return { ok: false, codeAccepted: true, error: describe(err) };
+
+  verifiedFor.current = null;
+  holdSession.current = false;
+  return { ok: true, user: data?.user ?? null };
+}
+
+/* -------------------------------------------------------------------------
    Provider
    ------------------------------------------------------------------------- */
 /* Mirrors sql/07's primary_role(): the one value profiles.role may hold,
@@ -86,6 +125,10 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [guest, setGuest] = useState(() => readLocal(GUEST_KEY, false));
+
+  /* Password reset by code — see resetWithCode. */
+  const holdSession = useRef(false);
+  const verifiedFor = useRef(null);
 
   /* ---- load the profile row that goes with a Supabase user ---- */
   const loadProfile = useCallback(async (u) => {
@@ -166,6 +209,10 @@ export function AuthProvider({ children }) {
     if (!HAS_SUPABASE) return () => { cancelled = true; };
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      /* A correct reset code signs the person in before their new password
+         is saved. Letting that through would drop them into the app with the
+         old password still in place, so it waits until resetWithCode says. */
+      if (holdSession.current) return;
       const u = session?.user ?? null;
       setUser(u);
       loadProfile(u);
@@ -369,17 +416,45 @@ export function AuthProvider({ children }) {
     setProfile(null);
   }, []);
 
-  /* ---- password reset ---- */
+  /* ---- password reset, by code ----
+     The email carries a one-time code ({{ .Token }} in the Supabase "Reset
+     Password" template), typed back in here. It used to carry a link to
+     /#reset that nothing in the app handled, so it opened the home page and
+     did nothing. A code also works when the email is read on a different
+     device from the one resetting, which a link never did. */
   const resetPassword = useCallback(async (email) => {
     if (!HAS_SUPABASE) {
       return { ok: false, error: "Password reset needs the database connected." };
     }
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/#reset`,
-    });
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim());
     if (err) return { ok: false, error: describeAuthError(err) };
     return { ok: true };
   }, [describeAuthError]);
+
+  const resetWithCode = useCallback(async ({ email, code, password }) => {
+    if (!HAS_SUPABASE) {
+      return { ok: false, error: "Password reset needs the database connected." };
+    }
+    const result = await runResetWithCode({
+      auth: supabase.auth, holdSession, verifiedFor,
+      email, code, password, describe: describeAuthError,
+    });
+    if (!result.ok) return result;
+    leaveGuest();
+    setUser(result.user);
+    await loadProfile(result.user);
+    return { ok: true };
+  }, [describeAuthError, loadProfile]);
+
+  /* Leaving the reset form after a code was accepted but before a password
+     was saved. The half-finished session is ended rather than left waiting,
+     and ordinary sign-in is let through again. */
+  const cancelReset = useCallback(async () => {
+    const wasVerified = verifiedFor.current !== null;
+    verifiedFor.current = null;
+    if (wasVerified && HAS_SUPABASE) await supabase.auth.signOut();
+    holdSession.current = false;
+  }, []);
 
   /* ---- subscription ---- */
   const subscription = useMemo(() => {
@@ -482,10 +557,12 @@ export function AuthProvider({ children }) {
     signIn,
     signOut,
     resetPassword,
+    resetWithCode,
+    cancelReset,
     continueAsGuest,
     exitGuest,
   }), [refreshProfile, setAccountRoles, user, profile, loading, error, subscription, guest, signUp, signIn,
-       signOut, resetPassword, continueAsGuest, exitGuest]);
+       signOut, resetPassword, resetWithCode, cancelReset, continueAsGuest, exitGuest]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

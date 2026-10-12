@@ -36,10 +36,10 @@
   ===========================================================================
 */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Loader2, Mail, Lock, User as UserIcon, AlertCircle, ArrowRight,
-  ListChecks, Timer, Layers, TrendingUp, Eye, EyeOff, Check,
+  ListChecks, Timer, Layers, TrendingUp, Eye, EyeOff, Check, KeyRound,
 } from "lucide-react";
 import { Logo } from "./ui";
 import { useAuth } from "./appAuth";
@@ -56,7 +56,7 @@ export default function AuthScreen({
   allowSignup = true,
   onBack = null,                 // where Back goes when there's no welcome panel
 }) {
-  const { signIn, signUp, resetPassword, continueAsGuest, mode } = useAuth();
+  const { signIn, signUp, continueAsGuest, mode } = useAuth();
 
   const [view, setView] = useState(initialView);   // welcome | login | signup
   const [fullName, setFullName] = useState("");
@@ -166,19 +166,9 @@ export default function AuthScreen({
     }
   }
 
-  async function handleForgot() {
-    if (!email.trim()) {
-      setMessage({ type: "error", text: "Enter your email first, then tap Forgot." });
-      return;
-    }
-    setBusy(true);
-    const result = await resetPassword(email);
-    setBusy(false);
-    setMessage(
-      result.ok
-        ? { type: "info", text: "Reset link sent — check your email." }
-        : { type: "error", text: result.error }
-    );
+  function handleForgot() {
+    setMessage(null);
+    setView("reset");
   }
 
   return (
@@ -298,6 +288,14 @@ export default function AuthScreen({
 
             {!isInstructor && <InstallPopup />}
           </>
+        ) : view === "reset" ? (
+          <ResetPassword
+            initialEmail={email}
+            onBack={(emailUsed) => {
+              if (emailUsed) setEmail(emailUsed);
+              setView("login");
+            }}
+          />
         ) : (
           <>
             <div className="mt-6 w-full bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
@@ -515,7 +513,9 @@ function PasswordField({
   );
 }
 
-function Field({ icon: Icon, label, value, onChange, placeholder, type = "text", autoComplete }) {
+function Field({
+  icon: Icon, label, value, onChange, placeholder, type = "text", autoComplete, inputMode, onEnter,
+}) {
   return (
     <div>
       <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
@@ -529,9 +529,187 @@ function Field({ icon: Icon, label, value, onChange, placeholder, type = "text",
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           autoComplete={autoComplete}
+          inputMode={inputMode}
+          onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
           className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
         />
       </div>
     </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   FORGOTTEN PASSWORD — A CODE, NOT A LINK
+
+   The email used to carry a link to /#reset that nothing handled, so it
+   opened the home page and did nothing. Now it carries a one-time code
+   (the Supabase "Reset Password" template shows {{ .Token }}) typed in here
+   with the new password. It works whichever device the email is read on.
+
+   Exported for its tests.
+   --------------------------------------------------------------------------- */
+export function ResetPassword({ initialEmail = "", onBack }) {
+  const { resetPassword, resetWithCode, cancelReset } = useAuth();
+
+  const [email, setEmail] = useState(initialEmail);
+  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeAccepted, setCodeAccepted] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  /* Leaving mid-way must not strand a half-finished session. After a
+     successful reset there is nothing to cancel and this does nothing. */
+  useEffect(() => () => { cancelReset?.(); }, [cancelReset]);
+
+  async function send() {
+    setMessage(null);
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setMessage({ type: "error", text: "Enter the email address you signed up with." });
+      return;
+    }
+    setBusy(true);
+    const result = await resetPassword(email);
+    setBusy(false);
+    if (!result.ok) {
+      setMessage({ type: "error", text: result.error });
+      return;
+    }
+    setSent(true);
+    setCode("");
+    setMessage({
+      type: "info",
+      text: `If ${email.trim()} has an account, a code is on its way. It can take a minute — check spam too.`,
+    });
+  }
+
+  async function save() {
+    setMessage(null);
+    if (!codeAccepted && !/^\d{6,10}$/.test(code.trim())) {
+      setMessage({ type: "error", text: "Enter the code from the email — numbers only." });
+      return;
+    }
+    if (password.length < 6) {
+      setMessage({ type: "error", text: "Your new password needs at least 6 characters." });
+      return;
+    }
+    if (password !== confirm) {
+      setMessage({ type: "error", text: "The two passwords don't match." });
+      return;
+    }
+    setBusy(true);
+    const result = await resetWithCode({ email, code, password });
+    setBusy(false);
+    if (result.ok) {
+      setMessage({ type: "info", text: "Password changed. Signing you in…" });
+      return;
+    }
+    if (result.codeAccepted) setCodeAccepted(true);
+    setMessage({ type: "error", text: result.error });
+  }
+
+  async function back() {
+    await cancelReset?.();
+    onBack?.(email.trim());
+  }
+
+  return (
+    <>
+      <div className="mt-6 w-full bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
+        <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
+          Reset your password
+        </h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          {sent
+            ? "Enter the code from the email, then choose a new password."
+            : "We'll email you a code to reset it."}
+        </p>
+
+        <div className="mt-5 space-y-3">
+          {!sent ? (
+            <Field icon={Mail} label="Email" type="email" value={email}
+                   onChange={setEmail} placeholder="you@email.com"
+                   autoComplete="email" onEnter={send} />
+          ) : (
+            <>
+              {codeAccepted ? (
+                <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                  <Check size={16} /> Code accepted — just the new password now.
+                </p>
+              ) : (
+                <Field icon={KeyRound} label="Code from the email" value={code}
+                       onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 10))}
+                       placeholder="123456" inputMode="numeric"
+                       autoComplete="one-time-code" />
+              )}
+              <PasswordField
+                label="New password"
+                value={password}
+                onChange={setPassword}
+                show={show}
+                onToggleShow={() => setShow(v => !v)}
+                placeholder="At least 6 characters"
+                autoComplete="new-password"
+                onEnter={save}
+              />
+              <PasswordField
+                label="Confirm new password"
+                value={confirm}
+                onChange={setConfirm}
+                show={show}
+                onToggleShow={() => setShow(v => !v)}
+                placeholder="Type it again"
+                autoComplete="new-password"
+                onEnter={save}
+                match={confirm.length === 0 ? null : password === confirm}
+              />
+            </>
+          )}
+
+          {message && (
+            <div className={`flex items-start gap-2 text-sm rounded-xl px-3 py-2.5 ${
+              message.type === "error"
+                ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300"
+                : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+            }`}>
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{message.text}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={sent ? save : send}
+            disabled={busy}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-900 font-bold py-3 rounded-xl transition"
+          >
+            {busy && <Loader2 size={16} className="animate-spin" />}
+            {sent ? "Save new password" : "Email me a code"}
+          </button>
+
+          {sent && !codeAccepted && (
+            <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+              No email?{" "}
+              <button type="button" onClick={send} disabled={busy}
+                      className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+                Send a new code
+              </button>
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 w-full">
+        <button
+          onClick={back}
+          className="w-full text-sm font-semibold text-slate-400 hover:text-emerald-400 py-2.5"
+        >
+          Back to sign in
+        </button>
+      </div>
+    </>
   );
 }
