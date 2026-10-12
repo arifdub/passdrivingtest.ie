@@ -29,6 +29,7 @@ import PushToggle from "../PushToggle";
 import { useTheme } from "../theme";
 import { setInstructorPhoto } from "../avatars";
 import DeleteAccountCard from "../DeleteAccountCard";
+import AccountSecurity from "../AccountSecurity";
 import { PrimaryButton, SecondaryButton, VerifiedBadge } from "../ui";
 import { TRANSMISSIONS, LESSON_TYPES } from "./instructorStore";
 
@@ -204,6 +205,11 @@ export default function Account({ loading, status, profile, draft, onRegister, o
           <Unfinished status={status} profile={profile} draft={draft} onRegister={onRegister} />
         </div>
       )}
+
+      {/* Change email or password, each confirmed by an emailed code. */}
+      <div className="mt-4">
+        <AccountSecurity />
+      </div>
 
       {/* Same component the learner's Settings screen uses (see
           src/DeleteAccountCard.jsx for why this is shared rather than

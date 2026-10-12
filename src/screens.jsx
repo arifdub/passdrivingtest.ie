@@ -39,6 +39,7 @@ import { useTextSize } from "./textSize";
 import AvatarPicker from "./AvatarPicker";
 import { setLearnerPhoto } from "./avatars";
 import DeleteAccountCard from "./DeleteAccountCard";
+import AccountSecurity from "./AccountSecurity";
 
 const SECTION_ICON = {
   "dtt.sec.rules": ClipboardCheck,
@@ -1394,6 +1395,7 @@ export function ProfileScreen({ theme, toggleTheme }) {
             covers that. */}
         {!isGuest && (
           <SettingsGroup title="Account">
+            <AccountSecurity bare />
             <DeleteAccountCard role="learner" onDeleted={signOut} />
           </SettingsGroup>
         )}
