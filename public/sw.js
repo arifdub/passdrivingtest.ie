@@ -21,7 +21,7 @@
 //      big files, and those are safe to cache forever because their names
 //      change whenever their contents do.
 
-const SW_VERSION = "v4-navigations-only";
+const SW_VERSION = "v5-icons-folder";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -95,8 +95,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "PassDrivingTest";
   const options = {
     body: data.body || "Something is waiting in your portal.",
-    icon: "/instructor-icon-192.png",
-    badge: "/instructor-icon-192.png",
+    icon: "/icons/instructor-192.png",
+    badge: "/icons/instructor-192.png",
     // Collapses repeats: three messages in a thread replace each other
     // rather than stacking three identical banners.
     tag: data.tag || "pdt-notify",

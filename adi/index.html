@@ -31,7 +31,7 @@
          file; everything behind it is shared.
          ===================================================================== -->
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/instructor-icon-192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/instructor-192.png" />
     <!-- Three apple-touch-icon lines for one icon, because iOS picks by a
          rule rather than by preference and a near-miss gets no icon at all:
          it falls back to a screenshot or a letter tile, which is what the
@@ -41,22 +41,17 @@
          fallback it looks for when no size matches. The precomposed one is
          for older iOS, which ignores the others entirely.
 
-         The files are called instructor-*, NOT adi-*, on purpose. This page
-         registers a service worker with scope "/adi", and a scope is a
-         PREFIX: it also covers /adi-apple-touch-icon.png and every other
-         path starting with those letters. iOS shows the icon in the share
-         sheet (loaded by the page) but fetches it again for the Add to Home
-         Screen step on its own, and that second fetch is the one a worker
-         in the way breaks — leaving the generic letter tile. The learner
-         app never had the problem because its icons sit outside "/app/".
-         New names also cannot hit a phone's or the CDN's cached old picture.
+         The files live in /icons/, outside every service-worker scope
+         (/adi, /app/, /admin). A scope is a path PREFIX, and the instructor
+         icons used to be named adi-*, which put them inside "/adi". The
+         learner app (/icons/student-*) is set up exactly the same way.
 
          Note that iOS reads these ONCE, when the app is added to the home
          screen, and never again. A wrong icon cannot be fixed by deploying
          a right one — the app has to be removed and re-added. -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/instructor-apple-touch-icon.png" />
-    <link rel="apple-touch-icon" href="/instructor-apple-touch-icon.png" />
-    <link rel="apple-touch-icon-precomposed" href="/instructor-apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/instructor-180.png" />
+    <link rel="apple-touch-icon" href="/icons/instructor-180.png" />
+    <link rel="apple-touch-icon-precomposed" href="/icons/instructor-180.png" />
     <link rel="manifest" href="/manifest-adi.json" />
     <meta name="theme-color" content="#0f172a" />
     <!-- Both names. Apple has read its own since 2008; the unprefixed one is
