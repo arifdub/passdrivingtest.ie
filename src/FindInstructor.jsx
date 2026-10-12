@@ -303,9 +303,25 @@ function InstructorCard({ row, enquiry, isGuest, onAsk, onBook, rating, myReview
             it, open the instructor portal.
           </p>
         ) : isGuest ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Create a free account to book a lesson or get in touch.
-          </p>
+          /* No account needed: the instructor's own page (sql/29) books
+             with a name, email and phone. A real navigation rather than an
+             <a>, the same as every other exit from this SPA — a plain link
+             does not reliably leave an installed home-screen app. */
+          <>
+            <PrimaryButton
+              onClick={() => {
+                const digits = String(row.adi_number || "").replace(/\D/g, "");
+                if (digits) window.location.href = `/adi/${digits}`;
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <CalendarCheck size={15} /> Book a lesson
+              </span>
+            </PrimaryButton>
+            <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+              No account needed. Create one to message instructors and keep your lessons in the app.
+            </p>
+          </>
         ) : (
           <>
             <PrimaryButton onClick={onBook}>

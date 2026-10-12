@@ -90,6 +90,19 @@ is("says why it was sent, and how to redirect it",
   toAdmin.includes("ADMIN_NOTIFY_EMAIL"));
 is("links to the admin portal", toAdmin.includes('href="https://passdrivingtest.ie/admin"'));
 
+/* ---- a guest: booked from an instructor's page with no account ------ */
+
+/* sql/29. There is no app for them to open and no setting for them to turn
+   off, so the frame must not point at either. */
+const toGuest = wrap("Title", "<p>body</p>", "See their page",
+  { go: "/adi/40953", audience: "guest" });
+is("the guest frame links back to the instructor's page",
+  toGuest.includes('href="https://passdrivingtest.ie/adi/40953"'));
+is("does not tell them to change a setting in an app they don't have",
+  !toGuest.includes("under Account"));
+is("does not claim they are an instructor", !toGuest.includes("you're an instructor"));
+is("says why it was sent", toGuest.includes("booked on PassDrivingTest.ie with this email address"));
+
 /* ---- money ----------------------------------------------------------- */
 
 is("cents become euro", euro(4500) === "€45.00", euro(4500));

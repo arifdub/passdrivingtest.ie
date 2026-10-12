@@ -157,6 +157,6 @@ export function euro(cents) {
 }
 
 export const LESSON_LABELS = {
-  edt: "EDT", pretest: "Pre-test", mock: "Mock test",
+  lesson: "Lesson", edt: "EDT", pretest: "Pre-test", mock: "Mock test",
   refresher: "Refresher", "test-day": "Test-day car",
 };

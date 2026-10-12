@@ -242,10 +242,11 @@ export function detailTable(rows) {
    email. A third branch, rather than a guess dressed up as one of the
    other two. */
 export function wrap(title, body, cta, { go = "/adi", audience = "instructor" } = {}) {
-  const kicker = { instructor: "Instructor portal", learner: "Driving lessons", admin: "Admin alert" }[audience]
+  const kicker = { instructor: "Instructor portal", learner: "Driving lessons", guest: "Driving lessons", admin: "Admin alert" }[audience]
     || "Instructor portal";
   const footer = {
     learner: "You're getting this because you booked a lesson through PassDrivingTest.ie. Turn these off under Account in the app.",
+    guest: "You're getting this because a lesson was booked on PassDrivingTest.ie with this email address. You only hear from us about bookings you make.",
     admin: "You're getting this because you're set as the admin contact for PassDrivingTest.ie. Change ADMIN_NOTIFY_EMAIL in Vercel to send it elsewhere.",
   }[audience]
     || "You're getting this because you're an instructor on PassDrivingTest.ie. Turn these off under Account in the portal.";
@@ -281,6 +282,32 @@ async function nameOf(userId) {
   return data?.user?.email?.split("@")[0] || "Someone";
 }
 
+/* Who the learner side of a booking is, and where their button goes.
+
+   A guest booked from the instructor's own page (sql/29) with no account:
+   there is no user id to look an address up from and no app to send them
+   to, so the email goes to the address they typed and the button goes back
+   to that instructor's page. The instructor's phone is included because a
+   guest has no in-app messages to reach them with. */
+async function learnerSide(b) {
+  if (b.learner_id) {
+    return { to: b.learner_id, go: "/app", audience: "learner", guest: false, phone: null };
+  }
+  const { data: i } = await db.from("instructor_profiles")
+    .select("adi_number, phone").eq("user_id", b.instructor_id).maybeSingle();
+  const digits = String(i?.adi_number || "").replace(/\D/g, "");
+  return {
+    to: undefined,
+    toEmail: b.guest_email,
+    go: digits ? `/adi/${digits}` : "/",
+    audience: "guest",
+    guest: true,
+    phone: i?.phone || null,
+  };
+}
+
+const GUEST_COLS = ", guest_name, guest_email, guest_phone";
+
 /* Reads the row and decides who to tell and what to say. Returns null when
    nobody should hear about it. */
 async function compose(kind, id) {
@@ -303,11 +330,11 @@ async function compose(kind, id) {
 
   if (kind === "booking") {
     const { data: b } = await db.from("bookings")
-      .select("id, instructor_id, learner_id, starts_at, pickup, status")
+      .select("id, instructor_id, learner_id, starts_at, pickup, status" + GUEST_COLS)
       .eq("id", id).single();
     if (!b || b.status !== "requested") return null;
 
-    const learner = await nameOf(b.learner_id);
+    const learner = b.learner_id ? await nameOf(b.learner_id) : b.guest_name;
     return {
       to: b.instructor_id,
       go: "/adi",
@@ -316,6 +343,9 @@ async function compose(kind, id) {
       html: wrap("A learner asked for a lesson",
         `<p style="margin:0 0 8px;color:#334155;line-height:1.6"><strong>${esc(learner)}</strong> has requested <strong>${esc(when(b.starts_at))}</strong>.</p>
          ${b.pickup ? `<p style="margin:0;color:#64748b;font-size:14px">Pick-up: ${esc(b.pickup)}</p>` : ""}
+         ${b.learner_id ? "" : `<p style="margin:8px 0 0;color:#64748b;font-size:14px">Booked from your own page, without an account.<br>
+           Phone: <strong>${esc(b.guest_phone)}</strong> · Email: ${esc(b.guest_email)}<br>
+           Accepting saves them to your students.</p>`}
          <p style="margin:12px 0 0;color:#64748b;font-size:14px">The hour is held for them until you accept or decline.</p>`,
         "Open the portal"),
     };
@@ -334,14 +364,16 @@ async function compose(kind, id) {
      either way and a learner wants it in writing now, not after. */
   if (kind === "booking_learner") {
     const { data: b } = await db.from("bookings")
-      .select("id, instructor_id, learner_id, starts_at, duration_minutes, price_cents, pickup, note, status")
+      .select("id, instructor_id, learner_id, starts_at, duration_minutes, price_cents, pickup, note, status" + GUEST_COLS)
       .eq("id", id).single();
     if (!b || b.status !== "requested") return null;
 
     const instructor = await nameOf(b.instructor_id);
+    const who = await learnerSide(b);
     return {
-      to: b.learner_id,
-      go: "/app",
+      to: who.to,
+      toEmail: who.toEmail,
+      go: who.go,
       subject: `Lesson request sent - ${when(b.starts_at)}`,
       push: {
         title: "Lesson request sent",
@@ -363,8 +395,8 @@ async function compose(kind, id) {
          ])}
          <p style="margin:14px 0 0;color:#64748b;font-size:14px">
            You pay your instructor directly. Nothing is charged here.</p>`,
-        "See it in the app",
-        { go: "/app", audience: "learner" },
+        who.guest ? "See their page" : "See it in the app",
+        { go: who.go, audience: who.audience },
       ),
     };
   }
@@ -376,7 +408,7 @@ async function compose(kind, id) {
      This is the one they will keep. */
   if (kind === "booking_accepted") {
     const { data: b } = await db.from("bookings")
-      .select("id, instructor_id, learner_id, starts_at, duration_minutes, price_cents, pickup, note, status")
+      .select("id, instructor_id, learner_id, starts_at, duration_minutes, price_cents, pickup, note, status" + GUEST_COLS)
       .eq("id", id).single();
     /* The trigger fires on the transition, but a row can change again
        between the trigger and this call — declined, cancelled — and a
@@ -384,9 +416,11 @@ async function compose(kind, id) {
     if (!b || b.status !== "accepted") return null;
 
     const instructor = await nameOf(b.instructor_id);
+    const who = await learnerSide(b);
     return {
-      to: b.learner_id,
-      go: "/app",
+      to: who.to,
+      toEmail: who.toEmail,
+      go: who.go,
       subject: `Lesson confirmed - ${when(b.starts_at)}`,
       push: {
         title: "Lesson confirmed",
@@ -407,9 +441,11 @@ async function compose(kind, id) {
          ])}
          <p style="margin:14px 0 0;color:#64748b;font-size:14px">
            You pay your instructor directly. If you need to change or cancel,
-           message them in the app as early as you can.</p>`,
-        "See it in the app",
-        { go: "/app", audience: "learner" },
+           ${who.guest
+             ? (who.phone ? `call or text them on <strong>${esc(who.phone)}</strong>` : "contact them")
+             : "message them in the app"} as early as you can.</p>`,
+        who.guest ? "See their page" : "See it in the app",
+        { go: who.go, audience: who.audience },
       ),
     };
   }
@@ -428,14 +464,16 @@ async function compose(kind, id) {
      points at the next useful action. */
   if (kind === "booking_declined") {
     const { data: b } = await db.from("bookings")
-      .select("id, instructor_id, learner_id, starts_at, duration_minutes, resolution_note, status")
+      .select("id, instructor_id, learner_id, starts_at, duration_minutes, resolution_note, status" + GUEST_COLS)
       .eq("id", id).single();
     if (!b || b.status !== "declined") return null;
 
     const instructor = await nameOf(b.instructor_id);
+    const who = await learnerSide(b);
     return {
-      to: b.learner_id,
-      go: "/app",
+      to: who.to,
+      toEmail: who.toEmail,
+      go: who.go,
       subject: `Lesson not confirmed - ${when(b.starts_at)}`,
       push: {
         title: "Lesson not confirmed",
@@ -452,10 +490,11 @@ async function compose(kind, id) {
                  <span style="color:#64748b;font-size:13px">They said:</span><br>${esc(b.resolution_note)}</p>`
             : ""}
          <p style="margin:0;color:#334155;line-height:1.6">
-           Their other times are in the app, and there are other instructors
-           in your area. Most learners find another slot the same week.</p>`,
+           ${who.guest
+             ? "Their other open times are on their page. Most learners find another slot the same week."
+             : "Their other times are in the app, and there are other instructors in your area. Most learners find another slot the same week."}</p>`,
         "Find another time",
-        { go: "/app", audience: "learner" },
+        { go: who.go, audience: who.audience },
       ),
     };
   }
@@ -471,6 +510,8 @@ async function compose(kind, id) {
 
     /* Whoever did not send it. */
     const to = m.sender_id === b.instructor_id ? b.learner_id : b.instructor_id;
+    /* A guest booking (sql/29) has no learner account to tell. */
+    if (!to) return null;
     if (!to || to === m.sender_id) return null;
 
     const from = await nameOf(m.sender_id);

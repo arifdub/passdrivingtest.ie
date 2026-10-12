@@ -25,7 +25,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  BrowserRouter, Routes, Route, Navigate, useNavigate,
+  BrowserRouter, Routes, Route, Navigate, useNavigate, useParams,
 } from "react-router-dom";
 import {
   Home as HomeIcon, BookOpen, Timer, TrendingUp, User, Loader2, Lock,
@@ -39,6 +39,7 @@ import { ProgressProvider } from "./progressStore";
 import { useTheme } from "./theme";
 import { TextSizeProvider } from "./textSize";
 import AuthScreen from "./AuthScreen";
+import InstructorPage from "./InstructorPage";
 import RoleEntry from "./RoleEntry";
 import StudentOnboarding from "./StudentOnboarding";
 import StudentJourney from "./StudentJourney";
@@ -885,6 +886,11 @@ function InstructorRoute() {
   );
 }
 
+function AdiNumberOrPortal() {
+  const { adi } = useParams();
+  return /^\d+$/.test(adi || "") ? <InstructorPage /> : <InstructorRoute />;
+}
+
 /* ===========================================================================
    ROOT
    =========================================================================== */
@@ -909,6 +915,13 @@ export default function App() {
                 <Route path="/student/signup" element={<StudentAuthRoute view="signup" />} />
                 <Route path="/student/onboarding" element={<StudentOnboardingRoute />} />
                 <Route path="/student/*" element={<StudentRoute />} />
+
+                {/* An instructor's own booking page: /adi/40953. Only an
+                    all-digits segment — anything else under /adi is the
+                    portal, as before. */}
+                <Route path="/adi/:adi" element={<AdiNumberOrPortal />} />
+                <Route path="/ADI/:adi" element={<InstructorPage />} />
+                <Route path="/Adi/:adi" element={<InstructorPage />} />
 
                 <Route path="/adi/signin" element={<InstructorAuthRoute view="login" />} />
                 <Route path="/adi/signup" element={<InstructorAuthRoute view="signup" />} />

@@ -9,7 +9,7 @@
 */
 
 import React from "react";
-import { MapPin } from "lucide-react";
+import { MapPin, Phone, Mail, Link2 } from "lucide-react";
 import { slotTime, slotDay, isPast, BOOKING_STATUS } from "../bookingStore";
 import { KIND_LABEL, euro } from "./teachingStore";
 
@@ -44,6 +44,31 @@ export function Card({ booking: b, muted, children }) {
           {s.label}
         </span>
       </div>
+
+      {/* Booked from the instructor's own page with no account (sql/29).
+          The only way to reach them is what they typed, so it is shown
+          in full and made tappable. */}
+      {!b.learner_id && b.guest_email && (
+        <div className="mt-2 rounded-xl bg-slate-50 dark:bg-slate-900/40 p-3">
+          <p className="text-sm font-bold text-slate-900 dark:text-white">{b.guest_name}</p>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {b.guest_phone && (
+              <a href={`tel:${b.guest_phone.replace(/[^\d+]/g, "")}`}
+                 className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                <Phone size={13} /> {b.guest_phone}
+              </a>
+            )}
+            <a href={`mailto:${b.guest_email}`}
+               className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400 break-all">
+              <Mail size={13} /> {b.guest_email}
+            </a>
+          </div>
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
+            <Link2 size={12} /> Booked from your page, no account
+            {b.status === "requested" ? " · accepting saves them to your students" : ""}
+          </p>
+        </div>
+      )}
 
       {b.pickup && (
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 flex items-start gap-1.5">

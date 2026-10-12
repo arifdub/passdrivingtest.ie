@@ -1130,3 +1130,93 @@ begin
     exists (select 1 from public.open_slots(adi, current_date + 8, 1) s where s.slot = pg_temp.slot(14, 8)),
     'removing a date''s hours restores the usual ones');
 end $$;
+
+-- --------------------------------------------------------------------------
+-- Booking from the instructor's own page, without an account (sql/29)
+-- --------------------------------------------------------------------------
+do $$
+declare
+  adi   constant uuid := '11111111-1111-1111-1111-111111111111';
+  guest constant text := 'select public.request_guest_booking(''11111111-1111-1111-1111-111111111111'', ';
+  v_id  uuid;
+  v_b   public.bookings%rowtype;
+  v_s   public.instructor_students%rowtype;
+begin
+  -- The public page finds them by number, however the number was typed.
+  perform pg_temp.report(
+    (select user_id from public.instructor_page('40953')) = adi,
+    'the public page finds an instructor by ADI number');
+  perform pg_temp.report(
+    (select user_id from public.instructor_page('F 40953')) = adi,
+    'and by the same number with a letter and a space');
+  perform pg_temp.report(
+    not exists (select 1 from public.instructor_page('99999')),
+    'an unknown number finds nobody');
+  perform pg_temp.report(
+    not exists (select 1 from public.instructor_page('')),
+    'and an empty one finds nobody, rather than everybody');
+
+  -- Nobody signed in.
+  perform set_config('request.jwt.claim.sub', '', false);
+  perform set_config('request.jwt.claim.role', 'anon', false);
+  delete from public.bookings where instructor_id = adi and current_date + 9 = (starts_at at time zone 'Europe/Dublin')::date;
+  delete from public.bookings where lower(guest_email) = 'sam@example.ie';
+
+  perform pg_temp.expect_ok(guest || 'pg_temp.slot(10, 9), ''Sam Walsh'', ''Sam@Example.ie'', ''087 123 4567'')',
+    'a guest books an open hour with a name, email and phone');
+
+  select * into v_b from public.bookings
+   where instructor_id = adi and starts_at = pg_temp.slot(10, 9) and status = 'requested';
+  perform pg_temp.report(
+    v_b.learner_id is null and v_b.guest_name = 'Sam Walsh'
+      and v_b.guest_email = 'sam@example.ie' and v_b.guest_phone = '087 123 4567',
+    'the booking carries the guest, with no account behind it');
+
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(10, 9), ''Jo Kelly'', ''jo@example.ie'', ''0861234567'')',
+    'a second guest cannot take the same hour');
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(14, 9), ''Jo Kelly'', ''not-an-email'', ''0861234567'')',
+    'a malformed email is refused');
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(14, 9), ''Jo Kelly'', ''jo@example.ie'', ''123'')',
+    'a phone number too short to be one is refused');
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(3, 9), ''Jo Kelly'', ''jo@example.ie'', ''0861234567'')',
+    'a guest is held to the same working hours as anyone');
+
+  perform pg_temp.expect_ok(guest || 'pg_temp.slot(12, 9), ''Sam Walsh'', ''sam@example.ie'', ''0871234567'')',
+    'the same guest may ask for a second hour');
+  perform pg_temp.expect_ok(guest || 'pg_temp.slot(14, 9), ''Sam Walsh'', ''sam@example.ie'', ''0871234567'')',
+    'and a third');
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(16, 9), ''Sam Walsh'', ''SAM@example.ie'', ''0871234567'')',
+    'but not a fourth while three are still waiting');
+
+  perform pg_temp.report(
+    not has_function_privilege('anon',
+      'public.place_booking(uuid, timestamptz, text, text, text, uuid, text, text, text)', 'execute'),
+    'the internal booking function cannot be called from the browser');
+  perform pg_temp.report(
+    has_function_privilege('anon',
+      'public.request_guest_booking(uuid, timestamptz, text, text, text, text, text, text)', 'execute'),
+    'the guest booking function can');
+
+  -- The instructor accepts, and the guest lands in their student list.
+  perform pg_temp.be(adi::text);
+  perform public.accept_booking(v_b.id);
+  select s.* into v_s from public.instructor_students s
+    join public.bookings b on b.student_id = s.id where b.id = v_b.id;
+  perform pg_temp.report(
+    v_s.full_name = 'Sam Walsh' and v_s.email = 'sam@example.ie'
+      and v_s.phone = '087 123 4567' and v_s.source = 'own' and v_s.learner_id is null,
+    'accepting a guest saves them to the student list with their phone and email');
+  perform pg_temp.report(
+    exists (select 1 from public.lessons l
+             join public.bookings b on b.lesson_id = l.id where b.id = v_b.id),
+    'and puts the lesson in the calendar');
+
+  -- A second accepted booking from the same guest reuses that student.
+  select id into v_id from public.bookings
+   where lower(guest_email) = 'sam@example.ie' and starts_at = pg_temp.slot(12, 9);
+  perform public.accept_booking(v_id);
+  perform pg_temp.report(
+    (select count(*) from public.instructor_students
+      where instructor_id = adi and lower(email) = 'sam@example.ie') = 1,
+    'the same guest booking again does not make a duplicate student');
+end $$;

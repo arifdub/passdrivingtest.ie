@@ -31,7 +31,9 @@ export default function Messages({ onRead }) {
       receivedBookings(user?.id, { status: ["requested", "accepted"] }),
       unreadByBooking(user?.id),
     ]);
-    setRows(r.filter(b => !isPast(b)));
+    /* A guest booking (sql/29) has nobody on the other end to read a
+       thread — they booked with an email and a phone number instead. */
+    setRows(r.filter(b => !isPast(b) && b.learner_id));
     setUnread(u);
     setError(e);
     setLoading(false);

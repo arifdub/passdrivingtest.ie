@@ -123,6 +123,77 @@ export async function requestBooking({ instructorId, at, kind, pickup, note }) {
   return { ok: true, id: data, error: null };
 }
 
+/* ------------------------------------------------------------------------- */
+/* An instructor's own page — /adi/<ADI number>                               */
+/* ------------------------------------------------------------------------- */
+
+/* The instructor behind an ADI number, if they are verified and listed.
+   Digits are compared on the server, so "F 40953" and "40953" both work. */
+export async function instructorPage(adi) {
+  if (!HAS_SUPABASE) return { instructor: null, error: "No database connection." };
+  const { data, error } = await supabase.rpc("instructor_page", { p_adi: String(adi || "") });
+  if (error) {
+    return { instructor: null, error: describeBookingError(error) };
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return { instructor: row || null, error: null };
+}
+
+/* What a guest must give before a request is sent. The server checks the
+   same things (sql/29); this is so the form can say so before the round
+   trip rather than after. */
+export function validateGuest({ name, email, phone }) {
+  const errors = {};
+  const n = (name || "").trim();
+  if (n.length < 2) errors.name = "Enter your name";
+  else if (n.length > 80) errors.name = "That name is too long";
+  const e = (email || "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) || e.length > 254) errors.email = "Enter a valid email address";
+  const digits = (phone || "").replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 15) errors.phone = "Enter a valid phone number";
+  return errors;
+}
+
+/* A booking without an account. The request is the same one a signed-in
+   learner makes, decided by the same rules (place_booking in sql/29). */
+export async function requestGuestBooking({ instructorId, at, name, email, phone, kind, pickup, note }) {
+  if (!HAS_SUPABASE || !instructorId || !at) return no();
+
+  const { data, error } = await supabase.rpc("request_guest_booking", {
+    p_instructor: instructorId,
+    p_starts_at: at.toISOString(),
+    p_name: (name || "").trim(),
+    p_email: (email || "").trim(),
+    p_phone: (phone || "").trim(),
+    p_kind: kind || "lesson",
+    p_pickup: pickup || null,
+    p_note: note || null,
+  });
+
+  if (error) {
+    if (error.code === "42883" || error.code === "PGRST202") {
+      return { ok: false, error: "Booking without an account isn't switched on yet (sql/29 hasn't been run)." };
+    }
+    return { ok: false, error: describeBookingError(error) };
+  }
+  return { ok: true, id: data, error: null };
+}
+
+/* The person on a booking, whichever way they booked. */
+export function bookingPerson(b) {
+  if (!b) return { name: "", email: null, phone: null, guest: false };
+  if (!b.learner_id && b.guest_email) {
+    return { name: b.guest_name || "Guest", email: b.guest_email, phone: b.guest_phone, guest: true };
+  }
+  return { name: b.learner?.full_name || b.learner_name || "", email: null, phone: null, guest: false };
+}
+
+/* The shareable address for an instructor's page. */
+export function pageLink(adiNumber, origin = "https://passdrivingtest.ie") {
+  const digits = String(adiNumber || "").replace(/\D/g, "");
+  return digits ? `${origin}/adi/${digits}` : null;
+}
+
 export async function myBookings(learnerId) {
   if (!HAS_SUPABASE || !learnerId) return { rows: [], error: "No database connection." };
 

@@ -32,6 +32,7 @@ import {
   PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge, useDismiss,
 } from "../ui";
 import { useAuth } from "../appAuth";
+import ShareLink from "./ShareLink";
 import { setBadge } from "../badge";
 import { usePlatform } from "../platform";
 import { portalsFor } from "../portals";
@@ -637,6 +638,9 @@ export function InstructorDashboard({
           </button>
         ))}
       </div>
+
+      {/* The address learners book from without an account. */}
+      <ShareLink profile={profile} />
 
       {/* ---------------------------------------------------------------- */}
       {/* The numbers                                                      */}

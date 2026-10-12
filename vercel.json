@@ -1,12 +1,48 @@
 {
   "rewrites": [
-    { "source": "/student", "destination": "/app/index.html" },
-    { "source": "/student/(.*)", "destination": "/app/index.html" },
-    { "source": "/adi", "destination": "/adi/index.html" },
-    { "source": "/adi/(.*)", "destination": "/adi/index.html" },
-    { "source": "/admin", "destination": "/admin/index.html" },
-    { "source": "/admin/(.*)", "destination": "/admin/index.html" },
-    { "source": "/app", "destination": "/app/index.html" },
-    { "source": "/app/(.*)", "destination": "/app/index.html" }
+    {
+      "source": "/student",
+      "destination": "/app/index.html"
+    },
+    {
+      "source": "/student/(.*)",
+      "destination": "/app/index.html"
+    },
+    {
+      "source": "/adi/:adi(\\d+)",
+      "destination": "/app/index.html"
+    },
+    {
+      "source": "/ADI/:adi(\\d+)",
+      "destination": "/app/index.html"
+    },
+    {
+      "source": "/Adi/:adi(\\d+)",
+      "destination": "/app/index.html"
+    },
+    {
+      "source": "/adi",
+      "destination": "/adi/index.html"
+    },
+    {
+      "source": "/adi/(.*)",
+      "destination": "/adi/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/admin/(.*)",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/app",
+      "destination": "/app/index.html"
+    },
+    {
+      "source": "/app/(.*)",
+      "destination": "/app/index.html"
+    }
   ]
 }
