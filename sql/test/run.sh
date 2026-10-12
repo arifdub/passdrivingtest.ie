@@ -180,7 +180,7 @@ fail=$(printf '%s' "$out" | grep -c "FAIL " || true)
 # A count of passes is checked as well as a count of failures: a scenario
 # that silently stopped running halfway would otherwise report zero failures
 # and look green.
-if [ "$fail" = "0" ] && [ "$pass" -ge 132 ]; then
+if [ "$fail" = "0" ] && [ "$pass" -ge 141 ]; then
   echo "  ✓ $pass checks, none failed"
 else
   echo "  ✗ $pass passed, $fail failed"

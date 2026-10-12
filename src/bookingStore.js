@@ -108,7 +108,7 @@ export async function whyNoSlots(instructorId) {
   };
 }
 
-export async function requestBooking({ instructorId, at, kind, pickup, note, car, gearbox }) {
+export async function requestBooking({ instructorId, at, kind, pickup, note, level, car, gearbox }) {
   if (!HAS_SUPABASE || !instructorId || !at) return no();
 
   const { data, error } = await rpcWithCar("request_booking", {
@@ -116,7 +116,7 @@ export async function requestBooking({ instructorId, at, kind, pickup, note, car
     p_starts_at: at.toISOString(),
     p_kind: kind || "lesson",
     p_pickup: pickup || null,
-  }, { car, gearbox, note });
+  }, { level, car, gearbox, note });
 
   if (error) return { ok: false, error: describeBookingError(error) };
   return { ok: true, id: data, error: null };
@@ -134,6 +134,16 @@ export const GEARBOXES = [
   { id: "manual",    label: "Manual" },
   { id: "automatic", label: "Automatic" },
 ];
+
+export const LEVELS = [
+  { id: 1, label: "Level 1 - Absolute beginner" },
+  { id: 2, label: "Level 2 - Beginner" },
+  { id: 3, label: "Level 3 - Experienced learner" },
+  { id: 4, label: "Level 4 - Advanced, ready for test" },
+];
+export function levelLabel(level) {
+  return LEVELS.find(l => l.id === Number(level))?.label || null;
+}
 
 /* In the instructor's car the gearbox is theirs, so only what they teach in.
    In the learner's own car it is whatever that car is. An instructor who
@@ -153,7 +163,8 @@ export function fitGearbox(instructor, car, gearbox) {
   return choices.length === 1 ? choices[0].id : null;
 }
 
-export function carError({ car, gearbox }) {
+export function carError({ level, car, gearbox }) {
+  if (!level) return "Choose your driving level";
   if (!car) return "Choose the instructor's car or your own";
   if (!gearbox) return "Choose manual or automatic";
   return null;
@@ -167,13 +178,16 @@ export function carLabel(b) {
   return [car, box].filter(Boolean).join(" · ") || null;
 }
 
-/* The database may not have sql/30 yet while the app already asks. Rather
+/* The database may not have sql/31 yet while the app already asks. Rather
    than refuse every booking in that gap, send it the old way and keep the
    answer in the note, where the instructor will still read it. */
-async function rpcWithCar(fn, args, { car, gearbox, note }) {
-  const first = await supabase.rpc(fn, { ...args, p_note: note || null, p_car: car || null, p_gearbox: gearbox || null });
-  if (!first.error || first.error.code !== "PGRST202" || (!car && !gearbox)) return first;
-  const said = carLabel({ car, gearbox });
+async function rpcWithCar(fn, args, { level, car, gearbox, note }) {
+  const first = await supabase.rpc(fn, {
+    ...args, p_note: note || null,
+    p_car: car || null, p_gearbox: gearbox || null, p_level: level ? Number(level) : null,
+  });
+  if (!first.error || first.error.code !== "PGRST202" || (!car && !gearbox && !level)) return first;
+  const said = [levelLabel(level), carLabel({ car, gearbox })].filter(Boolean).join(" · ");
   const withCar = [said, note].filter(Boolean).join(" — ") || null;
   return supabase.rpc(fn, { ...args, p_note: withCar });
 }
@@ -211,7 +225,7 @@ export function validateGuest({ name, email, phone }) {
 
 /* A booking without an account. The request is the same one a signed-in
    learner makes, decided by the same rules (place_booking in sql/29). */
-export async function requestGuestBooking({ instructorId, at, name, email, phone, kind, pickup, note, car, gearbox }) {
+export async function requestGuestBooking({ instructorId, at, name, email, phone, kind, pickup, note, level, car, gearbox }) {
   if (!HAS_SUPABASE || !instructorId || !at) return no();
 
   const { data, error } = await rpcWithCar("request_guest_booking", {
@@ -222,7 +236,7 @@ export async function requestGuestBooking({ instructorId, at, name, email, phone
     p_phone: (phone || "").trim(),
     p_kind: kind || "lesson",
     p_pickup: pickup || null,
-  }, { car, gearbox, note });
+  }, { level, car, gearbox, note });
 
   if (error) {
     if (error.code === "42883" || error.code === "PGRST202") {
@@ -281,7 +295,7 @@ export async function myBookings(learnerId) {
 /* The instructor's side                                                      */
 /* ------------------------------------------------------------------------- */
 
-export async function receivedBookings(instructorId, { status } = {}) {
+export async function receivedBookings(instructorId, { status, withLearners } = {}) {
   if (!HAS_SUPABASE || !instructorId) return { rows: [], error: "No database connection." };
 
   let q = supabase
@@ -296,7 +310,20 @@ export async function receivedBookings(instructorId, { status } = {}) {
     console.warn("Bookings not loaded:", error.message);
     return { rows: [], error: describeBookingError(error) };
   }
-  return { rows: data || [], error: null };
+  const rows = data || [];
+  if (!withLearners || !rows.length) return { rows, error: null };
+  return { rows: await withLearnerDetails(rows), error: null };
+}
+
+/* Who is behind each request: name and email for those with an account,
+   whether they are already the instructor's student, and how many lessons
+   they have had together (booking_learners, sql/31). Extra, not essential:
+   if it fails the cards just show less. */
+async function withLearnerDetails(rows) {
+  const { data, error } = await supabase.rpc("booking_learners", { p_ids: rows.map(r => r.id) });
+  if (error || !Array.isArray(data)) return rows;
+  const byId = Object.fromEntries(data.map(d => [d.booking_id, d]));
+  return rows.map(r => (byId[r.id] ? { ...r, who: byId[r.id] } : r));
 }
 
 export async function acceptBooking(id) {

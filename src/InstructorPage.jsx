@@ -153,7 +153,7 @@ export function Booking({ instructor }) {
   const [phone, setPhone] = useState("");
   const [pickup, setPickup] = useState("");
   const [note, setNote] = useState("");
-  const [carPick, setCarPick] = useState({ car: null, gearbox: null });
+  const [carPick, setCarPick] = useState({ level: null, car: null, gearbox: null });
   const [carErr, setCarErr] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [sending, setSending] = useState(false);
@@ -331,7 +331,7 @@ export function Booking({ instructor }) {
           </div>
 
           <div className="mt-4">
-            <CarChoice instructor={instructor} car={carPick.car} gearbox={carPick.gearbox}
+            <CarChoice instructor={instructor} value={carPick}
               error={carErr} onChange={v => { setCarPick(v); setCarErr(null); }} />
           </div>
 

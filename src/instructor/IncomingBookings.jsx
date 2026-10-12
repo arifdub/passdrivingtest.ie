@@ -51,7 +51,7 @@ export default function IncomingBookings({
 
   const refresh = useCallback(async () => {
     if (!user?.id) return;
-    const { rows, error: e } = await receivedBookings(user.id);
+    const { rows, error: e } = await receivedBookings(user.id, { withLearners: true });
     /* A request whose hour has already passed is not waiting on anybody —
        nobody is going to drive to it now. It stays in the full list on the
        Bookings screen, marked Missed. */

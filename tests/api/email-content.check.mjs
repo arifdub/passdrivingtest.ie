@@ -12,7 +12,7 @@
 
 process.env.NOTIFY_SITE = "https://passdrivingtest.ie";
 
-const { wrap, detailTable, euro, carText } = await import("../../api/notify.js");
+const { wrap, detailTable, euro, carText, levelText } = await import("../../api/notify.js");
 
 let bad = 0;
 const is = (what, ok, detail) => {
@@ -117,6 +117,8 @@ is("and their own car as theirs",
   carText({ car: "instructor", gearbox: "manual" }, "instructor") === "Your car, manual");
 is("the learner reads it the other way round",
   carText({ car: "instructor", gearbox: "manual" }) === "Instructor's car, manual");
+is("the level is written out in full", levelText({ level: 4 }) === "Level 4 - Advanced, ready for test");
+is("no level, no line", levelText({}) === null);
 is("a booking from before anyone was asked has no car line",
   carText({}) === null && carText({}, "instructor") === null);
 

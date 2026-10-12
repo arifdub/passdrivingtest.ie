@@ -31,7 +31,7 @@ export default function Bookings({ onAccepted, onChanged }) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const { rows: r, error: e } = await receivedBookings(user?.id);
+    const { rows: r, error: e } = await receivedBookings(user?.id, { withLearners: true });
     setRows(r); setError(e); setLoading(false);
   }, [user?.id]);
 

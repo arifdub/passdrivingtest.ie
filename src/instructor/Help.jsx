@@ -25,6 +25,7 @@ export const TOPICS = [
     id: "bookings", icon: CalendarCheck, title: "Booking requests",
     body: [
       "A request holds that hour for the learner until you accept or decline it, so answer it as soon as you can.",
+      "Each request shows who is asking, whether they are new or already your student, their driving level, whose car and which gearbox, the pick-up and any note.",
       "Accept puts the lesson in your Calendar and emails the learner a confirmation. Decline frees the hour and tells them, with your reason if you give one.",
       "You can answer up to three requests straight from the dashboard. The rest are under Bookings.",
     ],

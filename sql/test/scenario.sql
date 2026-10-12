@@ -750,7 +750,7 @@ begin
   -- ------------------------------------------------------------------
   insert into public.bookings (instructor_id, learner_id, starts_at, duration_minutes)
   values (adi::uuid, '22222222-2222-2222-2222-222222222222',
-          date_trunc('hour', now()) + interval '5 days', 60)
+          date_trunc('day', now()) + interval '5 days 3 hours', 60)  -- 3am: clear of every other test booking, whatever the time now
   returning id into v_declined;
 
   delete from net._sent;
@@ -1190,11 +1190,11 @@ begin
 
   perform pg_temp.report(
     not has_function_privilege('anon',
-      'public.place_booking(uuid, timestamptz, text, text, text, uuid, text, text, text, text, text)', 'execute'),
+      'public.place_booking(uuid, timestamptz, text, text, text, uuid, text, text, text, text, text, int)', 'execute'),
     'the internal booking function cannot be called from the browser');
   perform pg_temp.report(
     has_function_privilege('anon',
-      'public.request_guest_booking(uuid, timestamptz, text, text, text, text, text, text, text, text)', 'execute'),
+      'public.request_guest_booking(uuid, timestamptz, text, text, text, text, text, text, text, text, int)', 'execute'),
     'the guest booking function can');
 
   -- The instructor accepts, and the guest lands in their student list.
@@ -1222,7 +1222,7 @@ begin
 end $$;
 
 -- --------------------------------------------------------------------------
--- Whose car, and which gearbox (sql/30)
+-- Whose car, and which gearbox (sql/31)
 -- --------------------------------------------------------------------------
 do $$
 declare
@@ -1265,4 +1265,60 @@ begin
   perform pg_temp.expect_ok(
     'select public.request_booking(''11111111-1111-1111-1111-111111111111'', pg_temp.slot(13, 16))',
     'a booking without the two answers still goes through');
+end $$;
+
+-- --------------------------------------------------------------------------
+-- Driving level, and who is behind each request (sql/31)
+-- --------------------------------------------------------------------------
+do $$
+declare
+  adi   constant uuid := '11111111-1111-1111-1111-111111111111';
+  guest constant text := 'select public.request_guest_booking(''11111111-1111-1111-1111-111111111111'', ';
+  who   constant text := '''Dan Roche'', ''dan@example.ie'', ''0831234567'', ''lesson'', null, null, ''own'', ''manual'', ';
+  v_b   public.bookings%rowtype;
+  v_amy uuid;
+  v_dan uuid;
+  v_sam uuid;
+  v_r   record;
+begin
+  perform set_config('request.jwt.claim.sub', '', false);
+  perform set_config('request.jwt.claim.role', 'anon', false);
+  delete from public.bookings where lower(guest_email) = 'dan@example.ie';
+
+  perform pg_temp.expect_ok(guest || 'pg_temp.slot(9, 22), ' || who || '3)',
+    'a guest books saying they are an experienced learner');
+  select * into v_b from public.bookings where lower(guest_email) = 'dan@example.ie';
+  perform pg_temp.report(v_b.level = 3, 'the booking carries the level');
+  v_dan := v_b.id;
+
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(11, 22), ' || who || '5)',
+    'a level above 4 is refused');
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(11, 22), ' || who || '0)',
+    'and below 1');
+
+  select id into v_amy from public.bookings
+   where learner_id = '22222222-2222-2222-2222-222222222222' and starts_at = pg_temp.slot(11, 16);
+  select id into v_sam from public.bookings
+   where lower(guest_email) = 'sam@example.ie' and status = 'requested' limit 1;
+
+  -- The instructor asks who is behind three requests.
+  perform pg_temp.be(adi::text);
+  select * into v_r from public.booking_learners(array[v_amy]);
+  perform pg_temp.report(v_r.email = 'amy@example.com' and v_r.name is not null,
+    'an account learner''s name and email reach the instructor');
+  select * into v_r from public.booking_learners(array[v_dan]);
+  perform pg_temp.report(v_r.name = 'Dan Roche' and not v_r.is_student and v_r.lessons_had = 0,
+    'a guest the instructor has never taught is new');
+  select * into v_r from public.booking_learners(array[v_sam]);
+  perform pg_temp.report(v_r.is_student,
+    'a guest already saved to their students is recognised as theirs');
+
+  -- Somebody else's instructor gets nothing back.
+  perform pg_temp.be('33333333-3333-3333-3333-333333333333');
+  perform pg_temp.report(
+    not exists (select 1 from public.booking_learners(array[v_amy, v_dan])),
+    'nobody but the booking''s instructor can look the learner up');
+  perform pg_temp.report(
+    not has_function_privilege('anon', 'public.booking_learners(uuid[])', 'execute'),
+    'and nobody signed out can call it at all');
 end $$;

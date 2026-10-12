@@ -50,7 +50,7 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
   const [kind, setKind] = useState((instructor.lesson_types || [])[0] || "lesson");
   const [pickup, setPickup] = useState("");
   const [note, setNote] = useState("");
-  const [carPick, setCarPick] = useState({ car: null, gearbox: null });
+  const [carPick, setCarPick] = useState({ level: null, car: null, gearbox: null });
   const [carErr, setCarErr] = useState(null);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
@@ -251,7 +251,7 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
                 </div>
 
                 <div className="mt-4">
-                  <CarChoice instructor={instructor} car={carPick.car} gearbox={carPick.gearbox}
+                  <CarChoice instructor={instructor} value={carPick}
                     error={carErr} onChange={v => { setCarPick(v); setCarErr(null); }} />
                 </div>
 

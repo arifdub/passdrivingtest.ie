@@ -311,6 +311,12 @@ const GUEST_COLS = ", guest_name, guest_email, guest_phone";
 /* Whose car and which gearbox (sql/30). Booking emails read the whole row,
    so they work the same before and after that file is run; a booking made
    before it simply has neither. */
+const LEVELS = {
+  1: "Level 1 - Absolute beginner", 2: "Level 2 - Beginner",
+  3: "Level 3 - Experienced learner", 4: "Level 4 - Advanced, ready for test",
+};
+export const levelText = (b) => LEVELS[b?.level] || null;
+
 export function carText(b, reader) {
   const own = reader === "instructor" ? "Learner's own car" : "Your own car";
   const theirs = reader === "instructor" ? "Your car" : "Instructor's car";
@@ -354,6 +360,7 @@ async function compose(kind, id) {
       push: { title: "New booking request", body: `${learner} — ${when(b.starts_at)}` },
       html: wrap("A learner asked for a lesson",
         `<p style="margin:0 0 8px;color:#334155;line-height:1.6"><strong>${esc(learner)}</strong> has requested <strong>${esc(when(b.starts_at))}</strong>.</p>
+         ${levelText(b) ? `<p style="margin:0 0 4px;color:#334155;font-size:14px">Level: <strong>${esc(levelText(b))}</strong></p>` : ""}
          ${carText(b, "instructor") ? `<p style="margin:0 0 4px;color:#334155;font-size:14px">Car: <strong>${esc(carText(b, "instructor"))}</strong></p>` : ""}
          ${b.pickup ? `<p style="margin:0;color:#64748b;font-size:14px">Pick-up: ${esc(b.pickup)}</p>` : ""}
          ${b.learner_id ? "" : `<p style="margin:8px 0 0;color:#64748b;font-size:14px">Booked from your own page, without an account.<br>
@@ -402,6 +409,7 @@ async function compose(kind, id) {
            ["Instructor", instructor],
            ["When", when(b.starts_at)],
            ["How long", `${b.duration_minutes || 60} minutes`],
+           levelText(b) ? ["Your level", levelText(b)] : null,
            carText(b) ? ["Car", carText(b)] : null,
            b.pickup ? ["Pick-up", b.pickup] : null,
            b.price_cents ? ["Price", euro(b.price_cents)] : null,
@@ -449,6 +457,7 @@ async function compose(kind, id) {
            ["Instructor", instructor],
            ["When", when(b.starts_at)],
            ["How long", `${b.duration_minutes || 60} minutes`],
+           levelText(b) ? ["Your level", levelText(b)] : null,
            carText(b) ? ["Car", carText(b)] : null,
            b.pickup ? ["Pick-up", b.pickup] : null,
            b.price_cents ? ["Price", euro(b.price_cents)] : null,
