@@ -1,0 +1,14 @@
+{
+  "id": "/icon-test/",
+  "name": "Test Two",
+  "short_name": "Test Two",
+  "start_url": "/icon-test/2.html",
+  "scope": "/icon-test/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/icons/instructor-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/instructor-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
