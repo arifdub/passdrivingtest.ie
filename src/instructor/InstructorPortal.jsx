@@ -33,6 +33,7 @@ import {
 } from "../ui";
 import { useAuth } from "../appAuth";
 import ShareLink from "./ShareLink";
+import InstallPopup from "../InstallPopup";
 import { setBadge } from "../badge";
 import { usePlatform } from "../platform";
 import { portalsFor } from "../portals";
@@ -275,6 +276,10 @@ export default function InstructorPortal({ onExitRole }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      {/* Offered while the portal is open in a browser tab rather than from
+          the home screen. Renders nothing once installed. */}
+      <InstallPopup app="instructor" />
+
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                             */}
       {/*                                                                    */}

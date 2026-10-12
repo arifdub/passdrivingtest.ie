@@ -1,151 +1,247 @@
 /*
   ===========================================================================
-  INSTALL POPUP
+  INSTALL GUIDE
 
-  A dismissible card offering "Add to Home Screen", shown over the Welcome
-  view — a first-time visitor's best chance of installing, before they've
-  decided whether to sign up.
+  Shown when the app is open in a browser rather than from the home screen.
+  It works out the phone and browser, says exactly which button to tap, and
+  puts a bouncing arrow on the spot where that button actually is:
 
-  Reuses usePwaInstall's browser-specific states so the steps shown here
-  match the ones on the Profile screen's install card: Safari's Share button
-  lives at the bottom of the screen, but Chrome/Firefox/Edge on iOS and most
-  Android browsers put their menu next to the address bar at the top —
-  telling everyone "tap Share at the bottom" is wrong for most of them.
+    iPhone Safari      Share is in the bottom toolbar      arrow at the bottom
+    iPad Safari        Share is top right                   arrow top right
+    Chrome on iPhone   Share is in the address bar, top     arrow top right
+    Firefox/Edge iOS   menu in the bottom toolbar           arrow at the bottom
+    Android Chrome     one-tap install when the browser
+                       offers it, otherwise the menu        arrow top right
+    Samsung Internet   menu bottom right                    arrow bottom right
+    Facebook/Instagram an in-app browser cannot install;    arrow top right,
+    and other in-app   open the page in the real browser    to "Open in browser"
 
-  Dismissal is remembered in localStorage so it only interrupts once; it
-  never shows again after "installed" becomes true either.
+  Desktop and already-installed get nothing.
+
+  Closing it hides it for two weeks on this device, per app, so it asks
+  again later but never nags.
   ===========================================================================
 */
 
 import React, { useEffect, useState } from "react";
-import { X, Smartphone, Share2, MoreVertical, Menu, Download } from "lucide-react";
+import { X, Share, MoreVertical, MoreHorizontal, Menu, Download, ArrowUp, ArrowDown } from "lucide-react";
 import usePwaInstall from "./usePwaInstall";
 
-const DISMISSED_KEY = "pdt_install_popup_dismissed";
+const QUIET_DAYS = 14;
 
-function Step({ n, children }) {
+const APPS = {
+  instructor: {
+    name: "ADI Instructor",
+    icon: "/icons/instructor-180.png",
+    why: "Your bookings, students and calendar in one tap, with notifications when a learner books.",
+  },
+  learner: {
+    name: "PassDrivingTest",
+    icon: "/icons/student-180.png",
+    why: "Study full screen, pick up where you left off, and keep your progress in one tap.",
+  },
+};
+
+const ICONS = { share: Share, dots: MoreHorizontal, kebab: MoreVertical, menu: Menu };
+
+/* What to say and where to point, for a given phone and browser. Pure, so
+   it can be tested without a phone. Returns null when there is nothing to
+   offer. Each step is [icon key or null, text]. */
+export function guideFor(state, device = {}) {
+  if (state === "installed" || state === "desktop") return null;
+
+  if (device.inApp) {
+    return {
+      kind: "steps", where: "top-right",
+      steps: [
+        ["dots", "Tap the ⋯ menu at the top right."],
+        [null, `Choose "Open in browser" (or Open in Safari / Chrome).`],
+        [null, "Then add it to your Home Screen from there."],
+      ],
+    };
+  }
+
+  if (state === "prompt") return { kind: "prompt", where: null, steps: [] };
+
+  if (state === "ios-safari") {
+    return device.ipad
+      ? {
+          kind: "steps", where: "top-right",
+          steps: [
+            ["share", "Tap Share at the top right."],
+            [null, "Tap Add to Home Screen."],
+            [null, "Tap Add."],
+          ],
+        }
+      : {
+          kind: "steps", where: "bottom",
+          steps: [
+            ["share", "Tap Share in the bar at the bottom. On newer iPhones tap ⋯ first, then Share."],
+            [null, "Scroll down and tap Add to Home Screen."],
+            [null, "Tap Add."],
+          ],
+        };
+  }
+
+  if (state === "ios-other") {
+    if (device.browser === "chrome") {
+      return {
+        kind: "steps", where: "top-right",
+        steps: [
+          ["share", "Tap Share in the address bar, top right."],
+          [null, "Tap Add to Home Screen (under More if you can't see it)."],
+          [null, "Tap Add."],
+        ],
+      };
+    }
+    return {
+      kind: "steps", where: "bottom",
+      steps: [
+        ["menu", "Tap the menu in the bar at the bottom."],
+        [null, "Tap Share, then Add to Home Screen."],
+        [null, "Tap Add."],
+      ],
+    };
+  }
+
+  if (state === "android") {
+    if (device.browser === "samsung") {
+      return {
+        kind: "steps", where: "bottom-right",
+        steps: [
+          ["menu", "Tap the ☰ menu at the bottom right."],
+          [null, "Tap Add page to, then Home screen."],
+          [null, "Tap Add."],
+        ],
+      };
+    }
+    return {
+      kind: "steps", where: "top-right",
+      steps: [
+        ["kebab", "Tap the ⋮ menu at the top right."],
+        [null, "Tap Add to Home screen or Install app."],
+        [null, "Tap Install or Add."],
+      ],
+    };
+  }
+
+  return null;
+}
+
+function quietKey(app) { return `pdt_install_guide_${app}_closed_at`; }
+
+function recentlyClosed(app) {
+  try {
+    const at = Number(localStorage.getItem(quietKey(app)) || 0);
+    return at > 0 && Date.now() - at < QUIET_DAYS * 86400000;
+  } catch {
+    return false;
+  }
+}
+
+export default function InstallPopup({ app = "learner", delayMs = 1500 }) {
+  const { state, promptInstall, device } = usePwaInstall();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (recentlyClosed(app)) return;
+    const t = setTimeout(() => setVisible(true), delayMs);
+    return () => clearTimeout(t);
+  }, [app, delayMs]);
+
+  function close() {
+    setVisible(false);
+    try { localStorage.setItem(quietKey(app), String(Date.now())); } catch { /* private mode */ }
+  }
+
+  const guide = guideFor(state, device);
+  if (!visible || !guide) return null;
+
+  const meta = APPS[app] || APPS.learner;
+  const atTop = guide.where === "top-right";
+
   return (
-    <li className="flex items-start gap-3">
-      <span className="w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-xs font-black shrink-0">
-        {n}
-      </span>
-      <span className="text-sm text-slate-200 leading-snug pt-0.5">{children}</span>
-    </li>
+    <>
+      {guide.where && <Arrow where={guide.where} />}
+
+      <div
+        className={`fixed inset-x-0 z-50 flex justify-center px-4 ${atTop ? "top-0" : "bottom-0"}`}
+        style={atTop
+          ? { paddingTop: "calc(max(0.75rem, env(safe-area-inset-top)) + 3.5rem)" }
+          : { paddingBottom: `calc(max(0.75rem, env(safe-area-inset-bottom)) + ${guide.where ? "3.5rem" : "0rem"})` }}
+        role="dialog"
+        aria-label={`Install ${meta.name}`}
+      >
+        <div className="w-full max-w-sm bg-slate-900 text-white border border-slate-700 rounded-2xl p-4 shadow-2xl relative">
+          <button
+            onClick={close}
+            aria-label="Close"
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-300"
+          >
+            <X size={16} />
+          </button>
+
+          <div className="flex items-center gap-3 pr-10">
+            <img src={meta.icon} alt="" className="w-11 h-11 rounded-xl shrink-0" />
+            <div className="min-w-0">
+              <p className="font-black leading-tight">Install {meta.name}</p>
+              <p className="text-xs text-slate-400">Free. No App Store needed.</p>
+            </div>
+          </div>
+
+          <p className="mt-3 text-sm text-slate-300 leading-snug">{meta.why}</p>
+
+          {guide.kind === "prompt" ? (
+            <button
+              onClick={async () => {
+                const r = await promptInstall();
+                if (r.ok) close();
+              }}
+              className="mt-3 w-full inline-flex items-center justify-center gap-2 bg-emerald-500 text-slate-900 font-bold py-3 rounded-xl"
+            >
+              <Download size={16} /> Install
+            </button>
+          ) : (
+            <ol className="mt-3 space-y-2">
+              {guide.steps.map(([icon, text], i) => {
+                const Icon = icon ? ICONS[icon] : null;
+                return (
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-300 flex items-center justify-center text-xs font-black shrink-0">
+                      {i + 1}
+                    </span>
+                    <span className="text-sm text-slate-100 leading-snug pt-0.5">
+                      {Icon && <Icon size={15} className="inline -mt-0.5 mr-1 text-blue-400" />}
+                      {text}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+
+          <button onClick={close} className="mt-3 w-full text-xs font-semibold text-slate-400 py-1.5">
+            Not now
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
-export default function InstallPopup() {
-  const { state, promptInstall } = usePwaInstall();
-  const [dismissed, setDismissed] = useState(true);
-
-  useEffect(() => {
-    try {
-      setDismissed(localStorage.getItem(DISMISSED_KEY) === "1");
-    } catch {
-      setDismissed(false);
-    }
-  }, []);
-
-  function dismiss() {
-    setDismissed(true);
-    try {
-      localStorage.setItem(DISMISSED_KEY, "1");
-    } catch {
-      // Private browsing or storage disabled — it just asks again next visit.
-    }
-  }
-
-  if (dismissed) return null;
-  if (!["prompt", "ios-safari", "ios-other", "android"].includes(state)) return null;
-
-  const steps = {
-    "ios-safari": (
-      <>
-        <Step n="1">
-          Tap the <Share2 size={14} className="inline mx-0.5 -mt-0.5 text-blue-400" />
-          <span className="font-semibold"> Share</span> button at the bottom of Safari.
-        </Step>
-        <Step n="2">Scroll down and tap <span className="font-semibold">Add to Home Screen</span>.</Step>
-        <Step n="3">Tap <span className="font-semibold">Add</span> in the top right.</Step>
-      </>
-    ),
-    "ios-other": (
-      <>
-        <Step n="1">
-          Tap the <MoreVertical size={14} className="inline mx-0.5 -mt-0.5 text-blue-400" />
-          or <Share2 size={14} className="inline mx-0.5 -mt-0.5 text-blue-400" /> icon
-          next to the address bar, top right.
-        </Step>
-        <Step n="2">
-          Tap <span className="font-semibold">Share</span>, then
-          <span className="font-semibold"> More</span> if it's not listed yet.
-        </Step>
-        <Step n="3">Choose <span className="font-semibold">Add to Home Screen</span> and confirm.</Step>
-      </>
-    ),
-    android: (
-      <>
-        <Step n="1">
-          Tap the <Menu size={14} className="inline mx-0.5 -mt-0.5 text-blue-400" /> menu, top right.
-        </Step>
-        <Step n="2">
-          Choose <span className="font-semibold">Add to Home screen</span> or
-          <span className="font-semibold"> Install app</span>.
-        </Step>
-        <Step n="3">Confirm when your browser asks.</Step>
-      </>
-    ),
-  };
-
+/* The bouncing arrow, sitting right against the edge where the button is. */
+function Arrow({ where }) {
+  const pos = {
+    "top-right": { top: "max(0.25rem, env(safe-area-inset-top))", right: "1rem" },
+    bottom: { bottom: "max(0.25rem, env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)" },
+    "bottom-right": { bottom: "max(0.25rem, env(safe-area-inset-bottom))", right: "1.25rem" },
+  }[where];
+  const Icon = where === "top-right" ? ArrowUp : ArrowDown;
   return (
-    <div
-      className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-5"
-      style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
-    >
-    <div className="w-full max-w-sm bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-2xl relative">
-      <button
-        onClick={dismiss}
-        aria-label="Dismiss"
-        className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-700/70 hover:bg-slate-700 flex items-center justify-center text-slate-300"
-      >
-        <X size={16} />
-      </button>
-
-      <div className="flex items-center gap-3 pr-10">
-        <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-          <Smartphone size={18} className="text-emerald-400" />
-        </div>
-        <div>
-          <h2 className="font-bold text-white leading-tight">Add to your Home Screen</h2>
-          <p className="text-xs text-slate-400">Free — no App Store needed</p>
-        </div>
+    <div className="fixed z-50 pointer-events-none" style={pos} data-arrow={where}>
+      <div className="animate-bounce w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-xl shadow-blue-900/40 ring-4 ring-blue-500/30">
+        <Icon size={26} strokeWidth={3} />
       </div>
-
-      {state === "prompt" ? (
-        <>
-          <p className="mt-4 text-sm text-slate-300 leading-relaxed">
-            Add PassDrivingTest to your home screen for full-screen study with
-            no browser bar, and it still works offline.
-          </p>
-          <button
-            onClick={async () => {
-              const result = await promptInstall();
-              if (result.ok) dismiss();
-            }}
-            className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold py-3 rounded-xl transition"
-          >
-            <Download size={16} /> Add to Home Screen
-          </button>
-        </>
-      ) : (
-        <>
-          <ol className="mt-4 space-y-3">{steps[state]}</ol>
-          <p className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-400 leading-relaxed">
-            It opens full screen with its own icon, and works offline.
-          </p>
-        </>
-      )}
-    </div>
     </div>
   );
 }

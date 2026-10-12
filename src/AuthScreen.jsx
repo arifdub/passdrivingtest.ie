@@ -286,7 +286,6 @@ export default function AuthScreen({
               </button>
             )}
 
-            {!isInstructor && <InstallPopup />}
           </>
         ) : view === "reset" ? (
           <ResetPassword
@@ -423,6 +422,10 @@ export default function AuthScreen({
             Full access to all study material — no payment required.
           </p>
         )}
+
+        {/* Install guide for whichever app this door belongs to. Not on the
+            admin door: that app is for one or two people. */}
+        {!isAdminDoor && <InstallPopup app={isInstructor ? "instructor" : "learner"} />}
 
         {mode === "local" && (
           <p className="mt-3 text-[11px] text-amber-400/80 text-center leading-relaxed">

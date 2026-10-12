@@ -61,6 +61,27 @@ function detectIOSBrowserIsSafari() {
   return !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
 }
 
+/* Where the browser's own menu is, which is what an arrow has to point at.
+   iPad Safari keeps Share top right; iPhone Safari keeps it at the bottom.
+   Samsung Internet's menu is bottom right; Chrome's and Firefox's top right.
+   An in-app browser (Facebook, Instagram, LinkedIn, Snapchat, TikTok)
+   cannot add to the home screen at all — the page has to be opened in the
+   real browser first. */
+export function detectDevice(ua = (typeof navigator !== "undefined" && navigator.userAgent) || "",
+                             touch = (typeof navigator !== "undefined" && navigator.maxTouchPoints) || 0) {
+  const ipad = /iPad/.test(ua) || (/Macintosh/.test(ua) && touch > 1);
+  const ios = /iPhone|iPod/.test(ua) || ipad;
+  const android = /Android/.test(ua);
+  const inApp = /FBAN|FBAV|FB_IAB|Instagram|LinkedInApp|Snapchat|musical_ly|BytedanceWebview|Line\//.test(ua);
+  const browser = inApp ? "inapp"
+    : /SamsungBrowser/.test(ua) ? "samsung"
+    : /CriOS|Chrome/.test(ua) && !/EdgiOS|Edg\//.test(ua) ? "chrome"
+    : /FxiOS|Firefox/.test(ua) ? "firefox"
+    : /EdgiOS|Edg\//.test(ua) ? "edge"
+    : "safari";
+  return { ios, ipad, android, inApp, browser };
+}
+
 function detectAndroid() {
   if (typeof navigator === "undefined") return false;
   return /Android/.test(navigator.userAgent || "");
@@ -112,5 +133,7 @@ export default function usePwaInstall() {
           ? "android"
           : "desktop";
 
-  return { state, promptInstall };
+  const [device] = useState(() => detectDevice());
+
+  return { state, promptInstall, device };
 }
