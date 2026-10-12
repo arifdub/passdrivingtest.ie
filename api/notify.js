@@ -291,7 +291,7 @@ async function nameOf(userId) {
    guest has no in-app messages to reach them with. */
 async function learnerSide(b) {
   if (b.learner_id) {
-    return { to: b.learner_id, go: "/app", audience: "learner", guest: false, phone: null };
+    return { to: b.learner_id, go: "/student", audience: "learner", guest: false, phone: null };
   }
   const { data: i } = await db.from("instructor_profiles")
     .select("adi_number, phone").eq("user_id", b.instructor_id).maybeSingle();
@@ -517,7 +517,7 @@ async function compose(kind, id) {
     const from = await nameOf(m.sender_id);
     return {
       to,
-      go: to === b.instructor_id ? "/adi" : "/app",
+      go: to === b.instructor_id ? "/adi" : "/student",
       subject: `New message about ${when(b.starts_at)}`,
       push: { title: `${from}`, body: m.body.slice(0, 120) },
       /* `go` was computed just above and then ignored by wrap, so a
@@ -526,7 +526,7 @@ async function compose(kind, id) {
       html: wrap(`${from} sent you a message`,
         `<p style="margin:0;padding:14px;background:#f1f5f9;border-radius:12px;color:#334155;line-height:1.6">${esc(m.body)}</p>`,
         to === b.instructor_id ? "Reply in the portal" : "Reply in the app",
-        { go: to === b.instructor_id ? "/adi" : "/app",
+        { go: to === b.instructor_id ? "/adi" : "/student",
           audience: to === b.instructor_id ? "instructor" : "learner" }),
     };
   }

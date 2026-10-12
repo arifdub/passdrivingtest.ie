@@ -981,7 +981,7 @@ export function VerificationGate({ status, profile, draft, onRegister, onSignOut
         <div className="mt-5">
           <button
             type="button"
-            onClick={() => { window.location.href = "/app"; }}
+            onClick={() => { window.location.href = "/student"; }}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold py-3 text-sm transition hover:border-emerald-400 dark:hover:border-emerald-600 hover:text-emerald-600 dark:hover:text-emerald-400"
           >
             <GraduationCap size={16} />

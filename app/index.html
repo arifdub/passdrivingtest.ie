@@ -53,13 +53,19 @@
     <script type="module" src="/src/main.jsx"></script>
 
     <script>
-      // Scoped to /app/ so the service worker governs the app only. Registering
-      // it at the root would let it intercept navigations to the landing page,
-      // which is a plain static page and wants nothing to do with it.
+      // Scoped to the learner app only. Registering it at the root would let
+      // it intercept navigations to the landing page, which is a plain static
+      // page and wants nothing to do with it.
+      //
+      // The installed learner app opens at /student (manifest.json), so that
+      // is the scope when the page is there. /app/ is the old entry, kept for
+      // icons installed before: it routes by the account's role, which sent an
+      // instructor's account into the instructor portal from the learner icon.
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
+          var scope = location.pathname.indexOf("/student") === 0 ? "/student" : "/app/";
           navigator.serviceWorker
-            .register("/sw.js", { scope: "/app/" })
+            .register("/sw.js", { scope: scope })
             .catch(function () {
               /* Install-to-home-screen won't be offered. Nothing else breaks. */
             });
