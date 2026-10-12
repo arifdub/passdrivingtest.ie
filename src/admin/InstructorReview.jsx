@@ -34,7 +34,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   BadgeCheck, ShieldAlert, Clock3, Loader2, AlertCircle, Mail, Phone,
-  MapPin, Car, Undo2, RefreshCw,
+  MapPin, Car, Undo2, RefreshCw, ExternalLink,
 } from "lucide-react";
 import { useAuth } from "../appAuth";
 import { EmptyState, PrimaryButton, SecondaryButton } from "../ui";
@@ -152,7 +152,7 @@ export default function InstructorReview() {
 
 /* ------------------------------------------------------------------------- */
 
-function ReviewCard({ row, queue, onDone }) {
+export function ReviewCard({ row, queue, onDone }) {
   const { user } = useAuth();
   const [mode, setMode] = useState(null);        // reject | suspend
   const [notes, setNotes] = useState("");
@@ -204,6 +204,25 @@ function ReviewCard({ row, queue, onDone }) {
         {row.adi_category ? `Category ${row.adi_category}` : "Check against the RSA register"}
         {row.years_experience ? ` · ${row.years_experience} years teaching` : ""}
       </p>
+
+      {/* The RSA's own register has no deep-linkable search — it filters in
+          the page as you type rather than putting the query in the URL, so
+          there is no address that reliably opens straight to one result.
+          A `?search=` guess is included on the chance their widget reads
+          one on load; if it does not, this still opens the right page with
+          nothing broken, which is why it is safe to try without being sure.
+          Either way it replaces re-typing a name the reviewer is already
+          looking at, which was the actual point. */}
+      {row.full_name && (
+        <a
+          href={`https://www.rsa.ie/services/learner-drivers/driving-lessons/find-an-instructor/approved-driving-instructor?search=${encodeURIComponent(row.full_name)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          <ExternalLink size={12} /> Check {row.full_name} on the RSA register
+        </a>
+      )}
 
       <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <Field icon={Mail} value={row.email} />
