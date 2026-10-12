@@ -28,10 +28,10 @@ import { PrimaryButton, SecondaryButton } from "../ui";
 import { Sheet, Field, Label } from "./Students";
 import { listLessons } from "./teachingStore";
 import {
-  loadAvailability, addHours, removeHours, replaceWeek, setDayHours,
+  loadAvailability, addHours, removeHours, replaceWeek, setDayHours, setDateHours,
   addTimeOff, removeTimeOff, saveRules,
   WEEKDAYS, WEEK_ORDER, TYPICAL_WEEK, DEFAULT_RULES,
-  hoursLabel, weeklyHours, openSlots, dateKey, nextDateFor,
+  hoursLabel, weeklyHours, openSlots, dateKey, nextDateFor, hoursForDate,
   hourGridRange, blocksToHourSet, hourSetToBlocks,
 } from "./availabilityStore";
 
@@ -41,6 +41,9 @@ export default function Availability() {
   const { user } = useAuth();
 
   const [hours, setHours] = useState([]);
+  const [dateHours, setDateHours] = useState([]);
+  const [dateHoursError, setDateHoursError] = useState(null);
+  const [editingDate, setEditingDate] = useState(null); // "YYYY-MM-DD", or "" for a new one
   const [timeOff, setTimeOff] = useState([]);
   const [rules, setRules] = useState({ ...DEFAULT_RULES });
   const [lessons, setLessons] = useState([]);
@@ -58,6 +61,7 @@ export default function Availability() {
       listLessons(user?.id, { from: new Date(), to }),
     ]);
     setHours(a.hours); setTimeOff(a.timeOff); setRules(a.rules);
+    setDateHours(a.dateHours || []); setDateHoursError(a.dateHoursError || null);
     setLessons(l.rows);
     setError(a.error);
     setLoading(false);
@@ -136,6 +140,7 @@ export default function Availability() {
           <h2 className="font-black tracking-tight text-slate-900 dark:text-white">Your week</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {total ? `${total % 1 ? total.toFixed(1) : total} hours a week` : "Nothing set yet"}
+            {" · repeats every week"}
           </p>
         </div>
         {!hours.length && (
@@ -161,16 +166,15 @@ export default function Availability() {
               className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5"
             >
               <div className="flex items-start gap-3">
-                <div className="w-12 shrink-0 pt-0.5">
+                <div className="w-14 shrink-0 pt-0.5">
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
                     {DAY[id].short}
                   </p>
-                  {/* The next date this weekday falls on — a template row
-                      labelled only "MON" doesn't say which Monday, and that
-                      is exactly the ambiguity an instructor can't resolve by
-                      looking at it. */}
-                  <p className="text-[10px] font-semibold text-slate-400/70 tabular-nums">
-                    {nextDateFor(id).toLocaleDateString("en-IE", { day: "numeric", month: "short" })}
+                  {/* "next", because this row is every Thursday, not one:
+                      a bare "15 Oct" read as that date only. One-off dates
+                      live in the Specific dates section below. */}
+                  <p className="text-[10px] font-semibold text-slate-400/70 tabular-nums whitespace-nowrap">
+                    next {nextDateFor(id).toLocaleDateString("en-IE", { day: "numeric", month: "short" })}
                   </p>
                 </div>
 
@@ -244,6 +248,20 @@ export default function Availability() {
           );
         })}
       </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* One date only                                                      */}
+      {/* ------------------------------------------------------------------ */}
+      <SpecificDates
+        dateHours={dateHours}
+        unavailable={dateHoursError}
+        onAdd={() => setEditingDate("")}
+        onEdit={key => setEditingDate(key)}
+        onRemove={async key => {
+          const { ok, error: e } = await setDateHours(user?.id, key, []);
+          if (ok) refresh(); else setError(e);
+        }}
+      />
 
       {/* ------------------------------------------------------------------ */}
       {/* Time off                                                           */}
@@ -320,7 +338,21 @@ export default function Availability() {
       {/* ------------------------------------------------------------------ */}
       {/* The mirror                                                         */}
       {/* ------------------------------------------------------------------ */}
-      <Preview hours={hours} timeOff={timeOff} rules={rules} lessons={lessons} />
+      <Preview hours={hours} dateHours={dateHours} timeOff={timeOff} rules={rules} lessons={lessons} />
+
+      {editingDate !== null && (
+        <DateHoursSheet
+          initialDate={editingDate}
+          hours={hours}
+          dateHours={dateHours}
+          onClose={() => setEditingDate(null)}
+          onSave={async (key, blocks) => {
+            const { ok, error: e } = await setDateHours(user?.id, key, blocks);
+            if (ok) { setEditingDate(null); refresh(); }
+            return { ok, error: e };
+          }}
+        />
+      )}
 
       {addingFor !== null && (
         <AddHoursSheet
@@ -433,12 +465,12 @@ function Choice({ label, hint, value, onChange, options }) {
    Exported because it is the one part of this screen with a real calculation
    behind it, and a test that renders the whole screen only ever sees the
    loading state — effects do not run in renderToString. */
-export function Preview({ hours, timeOff, rules, lessons }) {
+export function Preview({ hours, dateHours = [], timeOff, rules, lessons }) {
   const now = new Date();
   const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(now); d.setDate(d.getDate() + i); d.setHours(0, 0, 0, 0);
-    days.push({ date: d, slots: openSlots({ date: d, hours, lessons, timeOff, rules, now }) });
+    days.push({ date: d, slots: openSlots({ date: d, hours, dateHours, lessons, timeOff, rules, now }) });
   }
   const anything = days.some(d => d.slots.length);
 
@@ -504,6 +536,131 @@ export function Preview({ hours, timeOff, rules, lessons }) {
 }
 
 /* ------------------------------------------------------------------------- */
+
+function keyToDate(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/* Hours for one calendar date, replacing that weekday's usual hours there
+   and nowhere else (sql/28). */
+export function SpecificDates({ dateHours, unavailable, onAdd, onEdit, onRemove }) {
+  const byDate = new Map();
+  for (const b of dateHours) {
+    if (!byDate.has(b.on_date)) byDate.set(b.on_date, []);
+    byDate.get(b.on_date).push(b);
+  }
+
+  return (
+    <>
+      <div className="mt-6 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="font-black tracking-tight text-slate-900 dark:text-white">Specific dates</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Hours for one date only. They replace your usual hours that day.
+          </p>
+        </div>
+        {!unavailable && (
+          <button
+            onClick={onAdd}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-2 text-xs font-bold"
+          >
+            <Plus size={14} /> Add a date
+          </button>
+        )}
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {unavailable ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-2xl p-4">
+            Not switched on yet. Run{" "}
+            <code className="font-mono text-xs">sql/28-date-specific-hours.sql</code> and reload.
+          </p>
+        ) : byDate.size ? [...byDate.entries()].map(([key, blocks]) => (
+          <div
+            key={key}
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 flex items-start gap-3"
+          >
+            <p className="w-20 shrink-0 pt-0.5 text-xs font-bold text-slate-500 dark:text-slate-400 tabular-nums">
+              {keyToDate(key).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" })}
+            </p>
+            <div className="flex-1 min-w-0 flex flex-wrap gap-1.5">
+              {blocks.map(b => (
+                <span
+                  key={b.id || b.starts_at}
+                  className="rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 px-2 py-1 text-xs font-bold tabular-nums"
+                >
+                  {hoursLabel(b)}
+                </span>
+              ))}
+            </div>
+            <button
+              onClick={() => onEdit(key)}
+              aria-label={`Change the hours on ${key}`}
+              className="shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 p-1.5"
+            >
+              <Clock size={14} />
+            </button>
+            <button
+              onClick={() => onRemove(key)}
+              aria-label={`Remove the hours on ${key}`}
+              className="shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-400 hover:text-red-500 p-1.5"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )) : (
+          <p className="text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
+            None. Use this to open one date — say a single Saturday —
+            without opening every Saturday.
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* Pick a date, then its hours. The grid starts from whatever that date
+   already has: its own hours if set, otherwise the weekday's usual ones. */
+export function DateHoursSheet({ initialDate, hours, dateHours, onClose, onSave }) {
+  const today = dateKey(new Date());
+  const [key, setKey] = useState(initialDate || today);
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(key) && key >= today;
+  const date = valid ? keyToDate(key) : null;
+
+  return (
+    <Sheet title="Hours for one date" onClose={onClose}>
+      <Field
+        label="Date"
+        type="date"
+        value={key}
+        onChange={setKey}
+        min={today}
+        disabled={!!initialDate}
+      />
+
+      {date ? (
+        <>
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            Only {date.toLocaleDateString("en-IE", { weekday: "long", day: "numeric", month: "long" })} changes.
+            Every other {date.toLocaleDateString("en-IE", { weekday: "long" })} keeps your usual hours.
+            To take the whole day off, use Time off instead.
+          </p>
+          <HourGrid
+            key={key}
+            blocks={hoursForDate(date, hours, dateHours)}
+            onClose={onClose}
+            onSave={async (blocks) => blocks.length
+              ? onSave(key, blocks)
+              : { ok: false, error: "Pick at least one hour. To take the day off, use Time off." }}
+          />
+        </>
+      ) : (
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Pick today or a later date.</p>
+      )}
+    </Sheet>
+  );
+}
 
 /* Available/not-available, one hour at a time, for a single day. Opens
    already set from whatever blocks that day has; saving turns the on-hours

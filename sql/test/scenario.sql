@@ -1071,3 +1071,62 @@ begin
     (select count(*) from public.push_subscriptions where user_id = fay) = 0,
     'and her registered device');
 end $outer$;
+
+-- --------------------------------------------------------------------------
+-- Hours for one date only (sql/28)
+--
+-- An instructor opened one Thursday and found the next Thursday open too,
+-- because weekly hours repeat. A date's own hours replace that weekday's
+-- usual hours on that date and nowhere else.
+-- --------------------------------------------------------------------------
+do $$
+declare
+  adi  constant uuid := '11111111-1111-1111-1111-111111111111';
+  amy  constant text := '22222222-2222-2222-2222-222222222222';
+  book constant text := 'select public.request_booking(''11111111-1111-1111-1111-111111111111'', ';
+begin
+  perform set_config('request.jwt.claim.role', 'service_role', false);
+  update public.instructor_booking_rules
+     set accepting = true, lesson_minutes = 60, min_notice_hours = 2,
+         max_days_ahead = 30, travel_buffer_minutes = 15
+   where instructor_id = adi;
+  delete from public.instructor_date_hours where instructor_id = adi;
+  delete from public.instructor_time_off where instructor_id = adi
+     and current_date + 8 between starts_on and ends_on
+      or instructor_id = adi and current_date + 15 between starts_on and ends_on;
+
+  -- Usually 09:00-17:00 and 18:00-23:00. On this one date: 10:00-12:00.
+  insert into public.instructor_date_hours (instructor_id, on_date, starts_at, ends_at)
+  values (adi, current_date + 8, '10:00', '12:00');
+
+  perform pg_temp.report(
+    exists (select 1 from public.open_slots(adi, current_date + 8, 1) s where s.slot = pg_temp.slot(10, 8)),
+    'a date''s own hours are offered on that date');
+  perform pg_temp.report(
+    not exists (select 1 from public.open_slots(adi, current_date + 8, 1) s where s.slot = pg_temp.slot(14, 8)),
+    'and replace the weekday''s usual hours there');
+  perform pg_temp.report(
+    (select count(*) from public.open_slots(adi, current_date + 8, 1)) = 2,
+    'so 10:00-12:00 with hour lessons is exactly two slots');
+  perform pg_temp.report(
+    exists (select 1 from public.open_slots(adi, current_date + 15, 1) s where s.slot = pg_temp.slot(14, 15)),
+    'the same weekday a week later keeps its usual hours');
+
+  perform pg_temp.be(amy);
+  perform pg_temp.expect_refused(book || 'pg_temp.slot(14, 8))',
+    'booking the weekday''s usual hour on a date with its own hours is refused');
+  perform pg_temp.expect_ok(book || 'pg_temp.slot(10, 8))',
+    'booking inside the date''s own hours is accepted');
+
+  perform set_config('request.jwt.claim.role', 'service_role', false);
+  perform pg_temp.expect_refused(
+    'insert into public.instructor_date_hours (instructor_id, on_date, starts_at, ends_at) values ('''
+      || adi || ''', current_date + 8, ''11:00'', ''13:00'')',
+    'two blocks on the same date cannot overlap');
+
+  -- Removing the date's hours puts the weekly pattern back.
+  delete from public.instructor_date_hours where instructor_id = adi;
+  perform pg_temp.report(
+    exists (select 1 from public.open_slots(adi, current_date + 8, 1) s where s.slot = pg_temp.slot(14, 8)),
+    'removing a date''s hours restores the usual ones');
+end $$;

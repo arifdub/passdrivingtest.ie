@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest";
 import {
   toMinutes, fromMinutes, trimTime, blockHours, weeklyHours, overlaps,
   dateKey, isDayOff, openSlots, DEFAULT_RULES, TYPICAL_WEEK, WEEK_ORDER,
-  hourGridRange, blocksToHourSet, hourSetToBlocks, nextDateFor,
+  hourGridRange, blocksToHourSet, hourSetToBlocks, nextDateFor, hoursForDate,
 } from "../instructor/availabilityStore";
 
 /* 2026-10-13 is a Tuesday. getDay() === 2. */
@@ -242,6 +242,36 @@ describe("the hourly picker", () => {
     ];
     const on = blocksToHourSet(split, 6, 22);
     expect(hourSetToBlocks(on)).toEqual(split);
+  });
+});
+
+describe("hours for one date only", () => {
+  /* 2026-10-15 and 2026-10-22 are both Thursdays (getDay() === 4). */
+  const THU_15 = new Date(2026, 9, 15);
+  const THU_22 = new Date(2026, 9, 22);
+  const weekly = [{ weekday: 4, starts_at: "09:00", ends_at: "17:00" }];
+  const oneDate = [{ on_date: "2026-10-15", starts_at: "10:00", ends_at: "12:00" }];
+
+  it("replaces the weekday's usual hours on that date", () => {
+    expect(hoursForDate(THU_15, weekly, oneDate)).toEqual(oneDate);
+  });
+
+  it("leaves the same weekday the following week alone", () => {
+    /* The reported bug: opening Thursday 15 Oct also opened 22 Oct. */
+    expect(hoursForDate(THU_22, weekly, oneDate)).toEqual(weekly);
+  });
+
+  it("opens a date whose weekday has no usual hours at all", () => {
+    expect(hoursForDate(THU_15, [], oneDate)).toEqual(oneDate);
+    expect(hoursForDate(THU_22, [], oneDate)).toEqual([]);
+  });
+
+  it("is what the slot list uses", () => {
+    const at = d => openSlots({
+      date: d, hours: weekly, dateHours: oneDate, rules: bare, now: new Date(2026, 9, 14, 7),
+    }).map(s => s.time);
+    expect(at(THU_15)).toEqual(["10:00", "11:00"]);
+    expect(at(THU_22)[0]).toBe("09:00");
   });
 });
 

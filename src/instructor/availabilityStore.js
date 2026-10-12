@@ -155,8 +155,17 @@ export function nextDateFor(weekday, from = new Date()) {
    hour, the same granularity the hourly picker sets hours in — rather than
    also offering 9:30, which nothing about a 9-to-5 day with hour lessons
    actually means. */
+/* The blocks worked on one calendar date. A date with its own hours
+   (instructor_date_hours, sql/28) uses only those; any other date uses its
+   weekday's usual hours. The same rule as hours_on() in sql/28. */
+export function hoursForDate(date, hours = [], dateHours = []) {
+  const key = dateKey(date);
+  const own = dateHours.filter(h => h.on_date === key);
+  return own.length ? own : hours.filter(h => h.weekday === date.getDay());
+}
+
 export function openSlots({
-  date, hours = [], lessons = [], timeOff = [],
+  date, hours = [], dateHours = [], lessons = [], timeOff = [],
   rules = DEFAULT_RULES, now = new Date(), step,
 }) {
   const key = dateKey(date);
@@ -170,7 +179,7 @@ export function openSlots({
   const latest = new Date(now.getTime());
   latest.setDate(latest.getDate() + (rules.max_days_ahead ?? DEFAULT_RULES.max_days_ahead));
 
-  const blocks = hours.filter(h => h.weekday === date.getDay());
+  const blocks = hoursForDate(date, hours, dateHours);
   if (!blocks.length) return [];
 
   /* Already-booked time on this day, widened by the buffer, as minute ranges.
@@ -272,18 +281,24 @@ export function hourSetToBlocks(hourSet) {
 /* ------------------------------------------------------------------------- */
 
 export async function loadAvailability(instructorId) {
-  const empty = { hours: [], timeOff: [], rules: { ...DEFAULT_RULES }, error: null };
+  const empty = {
+    hours: [], dateHours: [], timeOff: [], rules: { ...DEFAULT_RULES },
+    error: null, dateHoursError: null,
+  };
   if (!HAS_SUPABASE || !instructorId) {
     return { ...empty, error: "No database connection." };
   }
 
-  const [h, t, r] = await Promise.all([
+  const [h, t, r, d] = await Promise.all([
     supabase.from("instructor_hours").select("*")
       .eq("instructor_id", instructorId).order("weekday").order("starts_at"),
     supabase.from("instructor_time_off").select("*")
       .eq("instructor_id", instructorId).order("starts_on"),
     supabase.from("instructor_booking_rules").select("*")
       .eq("instructor_id", instructorId).maybeSingle(),
+    supabase.from("instructor_date_hours").select("*")
+      .eq("instructor_id", instructorId).gte("on_date", dateKey(new Date()))
+      .order("on_date").order("starts_at"),
   ]);
 
   /* One missing table should not blank the whole screen, so each part falls
@@ -291,16 +306,46 @@ export async function loadAvailability(instructorId) {
   const error = h.error?.message || t.error?.message || r.error?.message || null;
   if (error) console.warn("Availability not fully loaded:", error);
 
+  /* Kept apart from `error`: until sql/28 is run this table doesn't exist,
+     and that should hide one section, not the whole screen. */
+  const dateHoursError = d.error?.message || null;
+  if (dateHoursError) console.warn("Date-specific hours not loaded:", dateHoursError);
+
+  const trim = row => ({ ...row, starts_at: trimTime(row.starts_at), ends_at: trimTime(row.ends_at) });
+
   return {
-    hours: (h.data || []).map(row => ({
-      ...row, starts_at: trimTime(row.starts_at), ends_at: trimTime(row.ends_at),
-    })),
+    hours: (h.data || []).map(trim),
+    dateHours: (d.data || []).map(trim),
     timeOff: t.data || [],
     /* No row yet is not an error: sql/11 backfills existing instructors and
        the defaults are what a new one would get anyway. */
     rules: { ...DEFAULT_RULES, ...(r.data || {}) },
     error,
+    dateHoursError,
   };
+}
+
+/* Replaces one date's own hours outright. Empty clears them, which puts the
+   weekly hours back for that date — it does NOT mean "off"; time off does. */
+export async function setDateHours(instructorId, onDate, blocks) {
+  if (!HAS_SUPABASE || !instructorId) return no();
+
+  const { error: cleared } = await supabase
+    .from("instructor_date_hours").delete()
+    .eq("instructor_id", instructorId).eq("on_date", onDate);
+  if (cleared) return { ok: false, error: cleared.message };
+
+  if (!blocks.length) return { ok: true, error: null };
+
+  const { error } = await supabase.from("instructor_date_hours").insert(
+    blocks.map(b => ({
+      instructor_id: instructorId,
+      on_date: onDate,
+      starts_at: b.starts_at,
+      ends_at: b.ends_at,
+    }))
+  );
+  return error ? { ok: false, error: error.message } : { ok: true, error: null };
 }
 
 export async function addHours(instructorId, { weekday, starts_at, ends_at }) {

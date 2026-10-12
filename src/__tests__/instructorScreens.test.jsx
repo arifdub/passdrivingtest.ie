@@ -47,7 +47,8 @@ vi.mock("../instructor/availabilityStore", async (importOriginal) => {
   };
 });
 
-const { default: Availability, Preview, Rules, HourGrid } = await import("../instructor/Availability");
+const realStore = await import("../instructor/availabilityStore");
+const { default: Availability, Preview, Rules, HourGrid, SpecificDates, DateHoursSheet } = await import("../instructor/Availability");
 const { default: Account } = await import("../instructor/Account");
 
 const profile = {
@@ -159,6 +160,53 @@ describe("Availability", () => {
     expect(selected).toContain("90 min");
     expect(selected).toContain("None");
     expect(selected).not.toContain("1 hour");
+  });
+
+  describe("specific dates", () => {
+    const noop = () => {};
+
+    it("lists each date once, with its hours", () => {
+      const html = renderToString(
+        <SpecificDates
+          dateHours={[
+            { id: "a", on_date: "2026-10-15", starts_at: "10:00", ends_at: "12:00" },
+            { id: "b", on_date: "2026-10-15", starts_at: "14:00", ends_at: "15:00" },
+          ]}
+          unavailable={null} onAdd={noop} onEdit={noop} onRemove={noop}
+        />
+      );
+      expect(html).toContain("15 Oct");
+      expect(html).toContain("10:00–12:00");
+      expect(html).toContain("14:00–15:00");
+      expect([...html.matchAll(/Change the hours on 2026-10-15/g)]).toHaveLength(1);
+    });
+
+    it("starts a date from that weekday's usual hours, and says only that date changes", () => {
+      const { nextDateFor, dateKey } = realStore;
+      const soon = new Date(); soon.setDate(soon.getDate() + 1);
+      const thu = nextDateFor(4, soon);
+      const html = renderToString(
+        <DateHoursSheet
+          initialDate={dateKey(thu)}
+          hours={[{ weekday: 4, starts_at: "09:00", ends_at: "12:00" }]}
+          dateHours={[]}
+          onClose={noop} onSave={noop}
+        />
+      );
+      expect([...html.matchAll(/aria-pressed="true"/g)]).toHaveLength(3);
+      /* React marks inserted text with <!-- --> in server output, so the
+         sentence is matched without them. */
+      expect(html.replace(/<!-- -->/g, "")).toContain("Every other Thursday keeps your usual hours");
+    });
+
+    it("says how to switch it on rather than offering a button that would fail", () => {
+      const html = renderToString(
+        <SpecificDates dateHours={[]} unavailable="relation does not exist"
+          onAdd={noop} onEdit={noop} onRemove={noop} />
+      );
+      expect(html).toContain("sql/28-date-specific-hours.sql");
+      expect(html).not.toContain("Add a date");
+    });
   });
 
   describe("the hourly picker", () => {
