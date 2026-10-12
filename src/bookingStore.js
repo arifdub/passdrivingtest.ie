@@ -108,19 +108,74 @@ export async function whyNoSlots(instructorId) {
   };
 }
 
-export async function requestBooking({ instructorId, at, kind, pickup, note }) {
+export async function requestBooking({ instructorId, at, kind, pickup, note, car, gearbox }) {
   if (!HAS_SUPABASE || !instructorId || !at) return no();
 
-  const { data, error } = await supabase.rpc("request_booking", {
+  const { data, error } = await rpcWithCar("request_booking", {
     p_instructor: instructorId,
     p_starts_at: at.toISOString(),
     p_kind: kind || "lesson",
     p_pickup: pickup || null,
-    p_note: note || null,
-  });
+  }, { car, gearbox, note });
 
   if (error) return { ok: false, error: describeBookingError(error) };
   return { ok: true, id: data, error: null };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Whose car, and which gearbox (sql/30)                                      */
+/* ------------------------------------------------------------------------- */
+
+export const CARS = [
+  { id: "instructor", label: "Instructor's car" },
+  { id: "own",        label: "My own car" },
+];
+export const GEARBOXES = [
+  { id: "manual",    label: "Manual" },
+  { id: "automatic", label: "Automatic" },
+];
+
+/* In the instructor's car the gearbox is theirs, so only what they teach in.
+   In the learner's own car it is whatever that car is. An instructor who
+   never said is assumed to do both rather than neither. */
+export function gearboxChoices(instructor, car) {
+  if (car !== "instructor") return GEARBOXES;
+  const theirs = (instructor?.transmissions || []).filter(t => GEARBOXES.some(g => g.id === t));
+  return theirs.length ? GEARBOXES.filter(g => theirs.includes(g.id)) : GEARBOXES;
+}
+
+/* Picking a car can make the gearbox already chosen impossible (an automatic,
+   then the instructor's car when they only have a manual). Keep it if it
+   still fits; if only one fits, that is the answer; otherwise ask again. */
+export function fitGearbox(instructor, car, gearbox) {
+  const choices = gearboxChoices(instructor, car);
+  if (choices.some(g => g.id === gearbox)) return gearbox;
+  return choices.length === 1 ? choices[0].id : null;
+}
+
+export function carError({ car, gearbox }) {
+  if (!car) return "Choose the instructor's car or your own";
+  if (!gearbox) return "Choose manual or automatic";
+  return null;
+}
+
+/* "Instructor's car · Manual", for cards and emails. Null on bookings made
+   before anyone was asked. */
+export function carLabel(b) {
+  const car = b?.car === "own" ? "Own car" : b?.car === "instructor" ? "Instructor's car" : null;
+  const box = b?.gearbox === "automatic" ? "Automatic" : b?.gearbox === "manual" ? "Manual" : null;
+  return [car, box].filter(Boolean).join(" · ") || null;
+}
+
+/* The database may not have sql/30 yet while the app already asks. Rather
+   than refuse every booking in that gap, send it the old way and keep the
+   answer in the note, where the instructor will still read it. */
+async function rpcWithCar(fn, args, { car, gearbox, note }) {
+  const first = await supabase.rpc(fn, { ...args, p_note: note || null, p_car: car || null, p_gearbox: gearbox || null });
+  if (!first.error || first.error.code !== "PGRST202" || (!car && !gearbox)) return first;
+  const said = carLabel({ car, gearbox });
+  const withCar = [said, note].filter(Boolean).join(" — ") || null;
+  return supabase.rpc(fn, { ...args, p_note: withCar });
 }
 
 /* ------------------------------------------------------------------------- */
@@ -156,10 +211,10 @@ export function validateGuest({ name, email, phone }) {
 
 /* A booking without an account. The request is the same one a signed-in
    learner makes, decided by the same rules (place_booking in sql/29). */
-export async function requestGuestBooking({ instructorId, at, name, email, phone, kind, pickup, note }) {
+export async function requestGuestBooking({ instructorId, at, name, email, phone, kind, pickup, note, car, gearbox }) {
   if (!HAS_SUPABASE || !instructorId || !at) return no();
 
-  const { data, error } = await supabase.rpc("request_guest_booking", {
+  const { data, error } = await rpcWithCar("request_guest_booking", {
     p_instructor: instructorId,
     p_starts_at: at.toISOString(),
     p_name: (name || "").trim(),
@@ -167,8 +222,7 @@ export async function requestGuestBooking({ instructorId, at, name, email, phone
     p_phone: (phone || "").trim(),
     p_kind: kind || "lesson",
     p_pickup: pickup || null,
-    p_note: note || null,
-  });
+  }, { car, gearbox, note });
 
   if (error) {
     if (error.code === "42883" || error.code === "PGRST202") {

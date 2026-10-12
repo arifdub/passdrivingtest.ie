@@ -26,9 +26,10 @@ import {
 } from "lucide-react";
 import { PrimaryButton, SecondaryButton } from "./ui";
 import {
-  openSlots, requestBooking, whyNoSlots, slotsByDay, slotTime, slotDay,
+  openSlots, requestBooking, whyNoSlots, slotsByDay, slotTime, slotDay, carError,
 } from "./bookingStore";
 import { LESSON_LABELS, euro } from "./marketplace";
+import CarChoice from "./CarChoice";
 
 export default function BookSheet({ instructor, onClose, onBooked }) {
   const [days, setDays] = useState([]);
@@ -49,6 +50,8 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
   const [kind, setKind] = useState((instructor.lesson_types || [])[0] || "lesson");
   const [pickup, setPickup] = useState("");
   const [note, setNote] = useState("");
+  const [carPick, setCarPick] = useState({ car: null, gearbox: null });
+  const [carErr, setCarErr] = useState(null);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -247,6 +250,11 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
                   </p>
                 </div>
 
+                <div className="mt-4">
+                  <CarChoice instructor={instructor} car={carPick.car} gearbox={carPick.gearbox}
+                    error={carErr} onChange={v => { setCarPick(v); setCarErr(null); }} />
+                </div>
+
                 <div className="mt-4 space-y-3">
                   <Input
                     label="Pick-up address"
@@ -279,10 +287,13 @@ export default function BookSheet({ instructor, onClose, onBooked }) {
                   <PrimaryButton
                     disabled={sending}
                     onClick={async () => {
+                      const ce = carError(carPick);
+                      setCarErr(ce);
+                      if (ce) return;
                       setSending(true); setRequestError(null);
                       const r = await requestBooking({
                         instructorId: instructor.user_id,
-                        at: picked, kind, pickup, note,
+                        at: picked, kind, pickup, note, ...carPick,
                       });
                       setSending(false);
                       if (r.ok) { setDone(true); return; }

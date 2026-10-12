@@ -12,7 +12,7 @@
 
 process.env.NOTIFY_SITE = "https://passdrivingtest.ie";
 
-const { wrap, detailTable, euro } = await import("../../api/notify.js");
+const { wrap, detailTable, euro, carText } = await import("../../api/notify.js");
 
 let bad = 0;
 const is = (what, ok, detail) => {
@@ -108,6 +108,17 @@ is("says why it was sent", toGuest.includes("booked on PassDrivingTest.ie with t
 is("cents become euro", euro(4500) === "€45.00", euro(4500));
 is("an odd amount is not rounded away", euro(4499) === "€44.99", euro(4499));
 is("nothing becomes zero, not NaN", euro(null) === "€0.00", euro(null));
+
+/* ---- whose car (sql/30) --------------------------------------------- */
+
+is("the instructor reads the learner's car as theirs",
+  carText({ car: "own", gearbox: "automatic" }, "instructor") === "Learner's own car, automatic");
+is("and their own car as theirs",
+  carText({ car: "instructor", gearbox: "manual" }, "instructor") === "Your car, manual");
+is("the learner reads it the other way round",
+  carText({ car: "instructor", gearbox: "manual" }) === "Instructor's car, manual");
+is("a booking from before anyone was asked has no car line",
+  carText({}) === null && carText({}, "instructor") === null);
 
 console.log(bad ? `\n${bad} failed` : "\nthe emails say the right thing to the right person");
 process.exit(bad ? 1 : 0);

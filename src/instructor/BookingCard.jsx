@@ -9,8 +9,8 @@
 */
 
 import React from "react";
-import { MapPin, Phone, Mail, Link2 } from "lucide-react";
-import { slotTime, slotDay, isPast, BOOKING_STATUS } from "../bookingStore";
+import { MapPin, Phone, Mail, Link2, Car } from "lucide-react";
+import { slotTime, slotDay, isPast, BOOKING_STATUS, carLabel } from "../bookingStore";
 import { KIND_LABEL, euro } from "./teachingStore";
 
 const TONE = {
@@ -70,6 +70,11 @@ export function Card({ booking: b, muted, children }) {
         </div>
       )}
 
+      {carLabel(b) && (
+        <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+          <Car size={14} className="shrink-0 text-slate-400" /> {carLabel(b)}
+        </p>
+      )}
       {b.pickup && (
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 flex items-start gap-1.5">
           <MapPin size={14} className="shrink-0 mt-0.5 text-slate-400" /> {b.pickup}

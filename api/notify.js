@@ -308,6 +308,18 @@ async function learnerSide(b) {
 
 const GUEST_COLS = ", guest_name, guest_email, guest_phone";
 
+/* Whose car and which gearbox (sql/30). Booking emails read the whole row,
+   so they work the same before and after that file is run; a booking made
+   before it simply has neither. */
+export function carText(b, reader) {
+  const own = reader === "instructor" ? "Learner's own car" : "Your own car";
+  const theirs = reader === "instructor" ? "Your car" : "Instructor's car";
+  const car = b.car === "own" ? own : b.car === "instructor" ? theirs : null;
+  const box = b.gearbox === "automatic" || b.gearbox === "manual" ? b.gearbox : null;
+  if (!car) return box ? box[0].toUpperCase() + box.slice(1) : null;
+  return box ? `${car}, ${box}` : car;
+}
+
 /* Reads the row and decides who to tell and what to say. Returns null when
    nobody should hear about it. */
 async function compose(kind, id) {
@@ -330,7 +342,7 @@ async function compose(kind, id) {
 
   if (kind === "booking") {
     const { data: b } = await db.from("bookings")
-      .select("id, instructor_id, learner_id, starts_at, pickup, status" + GUEST_COLS)
+      .select("*")
       .eq("id", id).single();
     if (!b || b.status !== "requested") return null;
 
@@ -342,6 +354,7 @@ async function compose(kind, id) {
       push: { title: "New booking request", body: `${learner} — ${when(b.starts_at)}` },
       html: wrap("A learner asked for a lesson",
         `<p style="margin:0 0 8px;color:#334155;line-height:1.6"><strong>${esc(learner)}</strong> has requested <strong>${esc(when(b.starts_at))}</strong>.</p>
+         ${carText(b, "instructor") ? `<p style="margin:0 0 4px;color:#334155;font-size:14px">Car: <strong>${esc(carText(b, "instructor"))}</strong></p>` : ""}
          ${b.pickup ? `<p style="margin:0;color:#64748b;font-size:14px">Pick-up: ${esc(b.pickup)}</p>` : ""}
          ${b.learner_id ? "" : `<p style="margin:8px 0 0;color:#64748b;font-size:14px">Booked from your own page, without an account.<br>
            Phone: <strong>${esc(b.guest_phone)}</strong> · Email: ${esc(b.guest_email)}<br>
@@ -364,7 +377,7 @@ async function compose(kind, id) {
      either way and a learner wants it in writing now, not after. */
   if (kind === "booking_learner") {
     const { data: b } = await db.from("bookings")
-      .select("id, instructor_id, learner_id, starts_at, duration_minutes, price_cents, pickup, note, status" + GUEST_COLS)
+      .select("*")
       .eq("id", id).single();
     if (!b || b.status !== "requested") return null;
 
@@ -389,6 +402,7 @@ async function compose(kind, id) {
            ["Instructor", instructor],
            ["When", when(b.starts_at)],
            ["How long", `${b.duration_minutes || 60} minutes`],
+           carText(b) ? ["Car", carText(b)] : null,
            b.pickup ? ["Pick-up", b.pickup] : null,
            b.price_cents ? ["Price", euro(b.price_cents)] : null,
            b.note ? ["Your note", b.note] : null,
@@ -408,7 +422,7 @@ async function compose(kind, id) {
      This is the one they will keep. */
   if (kind === "booking_accepted") {
     const { data: b } = await db.from("bookings")
-      .select("id, instructor_id, learner_id, starts_at, duration_minutes, price_cents, pickup, note, status" + GUEST_COLS)
+      .select("*")
       .eq("id", id).single();
     /* The trigger fires on the transition, but a row can change again
        between the trigger and this call — declined, cancelled — and a
@@ -435,6 +449,7 @@ async function compose(kind, id) {
            ["Instructor", instructor],
            ["When", when(b.starts_at)],
            ["How long", `${b.duration_minutes || 60} minutes`],
+           carText(b) ? ["Car", carText(b)] : null,
            b.pickup ? ["Pick-up", b.pickup] : null,
            b.price_cents ? ["Price", euro(b.price_cents)] : null,
            b.note ? ["Your note", b.note] : null,

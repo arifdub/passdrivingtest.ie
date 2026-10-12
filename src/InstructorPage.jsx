@@ -26,8 +26,9 @@ import { useAuth } from "./appAuth";
 import { PrimaryButton, SecondaryButton } from "./ui";
 import {
   instructorPage, openSlots, whyNoSlots, slotsByDay, slotTime, slotDay,
-  requestBooking, requestGuestBooking, validateGuest,
+  requestBooking, requestGuestBooking, validateGuest, carError,
 } from "./bookingStore";
+import CarChoice from "./CarChoice";
 import { emptyReason } from "./BookSheet";
 import { LESSON_LABELS, euro } from "./marketplace";
 
@@ -152,6 +153,8 @@ export function Booking({ instructor }) {
   const [phone, setPhone] = useState("");
   const [pickup, setPickup] = useState("");
   const [note, setNote] = useState("");
+  const [carPick, setCarPick] = useState({ car: null, gearbox: null });
+  const [carErr, setCarErr] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(null);
@@ -177,16 +180,16 @@ export function Booking({ instructor }) {
 
   async function send() {
     setRequestError(null);
-    if (!asAccount) {
-      const errs = validateGuest({ name, email, phone });
-      setFieldErrors(errs);
-      if (Object.keys(errs).length) return;
-    }
+    const ce = carError(carPick);
+    setCarErr(ce);
+    const errs = asAccount ? {} : validateGuest({ name, email, phone });
+    setFieldErrors(errs);
+    if (ce || Object.keys(errs).length) return;
     setSending(true);
     const r = asAccount
-      ? await requestBooking({ instructorId: instructor.user_id, at: picked, kind, pickup, note })
+      ? await requestBooking({ instructorId: instructor.user_id, at: picked, kind, pickup, note, ...carPick })
       : await requestGuestBooking({
-          instructorId: instructor.user_id, at: picked, name, email, phone, kind, pickup, note,
+          instructorId: instructor.user_id, at: picked, name, email, phone, kind, pickup, note, ...carPick,
         });
     setSending(false);
     if (r.ok) {
@@ -325,6 +328,11 @@ export function Booking({ instructor }) {
               {slotDay(picked)} at {slotTime(picked)}
               {rate ? <span className="font-normal text-slate-600 dark:text-slate-300"> · {euro(rate)}</span> : null}
             </p>
+          </div>
+
+          <div className="mt-4">
+            <CarChoice instructor={instructor} car={carPick.car} gearbox={carPick.gearbox}
+              error={carErr} onChange={v => { setCarPick(v); setCarErr(null); }} />
           </div>
 
           <div className="mt-4 space-y-3">

@@ -1190,11 +1190,11 @@ begin
 
   perform pg_temp.report(
     not has_function_privilege('anon',
-      'public.place_booking(uuid, timestamptz, text, text, text, uuid, text, text, text)', 'execute'),
+      'public.place_booking(uuid, timestamptz, text, text, text, uuid, text, text, text, text, text)', 'execute'),
     'the internal booking function cannot be called from the browser');
   perform pg_temp.report(
     has_function_privilege('anon',
-      'public.request_guest_booking(uuid, timestamptz, text, text, text, text, text, text)', 'execute'),
+      'public.request_guest_booking(uuid, timestamptz, text, text, text, text, text, text, text, text)', 'execute'),
     'the guest booking function can');
 
   -- The instructor accepts, and the guest lands in their student list.
@@ -1219,4 +1219,50 @@ begin
     (select count(*) from public.instructor_students
       where instructor_id = adi and lower(email) = 'sam@example.ie') = 1,
     'the same guest booking again does not make a duplicate student');
+end $$;
+
+-- --------------------------------------------------------------------------
+-- Whose car, and which gearbox (sql/30)
+-- --------------------------------------------------------------------------
+do $$
+declare
+  guest constant text := 'select public.request_guest_booking(''11111111-1111-1111-1111-111111111111'', ';
+  who   constant text := '''Cara Doyle'', ''cara@example.ie'', ''0851234567'', ''lesson'', null, null, ';
+  v_b   public.bookings%rowtype;
+begin
+  perform set_config('request.jwt.claim.sub', '', false);
+  perform set_config('request.jwt.claim.role', 'anon', false);
+  delete from public.bookings where lower(guest_email) = 'cara@example.ie';
+
+  -- Aoife teaches in a manual car only.
+  perform pg_temp.expect_ok(guest || 'pg_temp.slot(9, 16), ' || who || '''instructor'', ''manual'')',
+    'a guest books in the instructor''s manual car');
+  select * into v_b from public.bookings
+   where lower(guest_email) = 'cara@example.ie' and starts_at = pg_temp.slot(9, 16);
+  perform pg_temp.report(v_b.car = 'instructor' and v_b.gearbox = 'manual',
+    'the booking says whose car and which gearbox');
+
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(9, 18), ' || who || '''instructor'', ''automatic'')',
+    'an automatic in the car of an instructor who only has a manual is refused');
+  perform pg_temp.expect_ok(guest || 'pg_temp.slot(9, 18), ' || who || '''own'', ''automatic'')',
+    'but an automatic in the learner''s own car is fine');
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(9, 20), ' || who || '''van'', ''manual'')',
+    'a car that is neither theirs nor the instructor''s is refused');
+  perform pg_temp.expect_refused(guest || 'pg_temp.slot(9, 20), ' || who || '''own'', ''semi'')',
+    'a gearbox that is neither manual nor automatic is refused');
+
+  -- The signed-in door takes the same two answers.
+  perform pg_temp.be('22222222-2222-2222-2222-222222222222');
+  perform pg_temp.expect_ok(
+    'select public.request_booking(''11111111-1111-1111-1111-111111111111'', pg_temp.slot(11, 16), ''lesson'', null, null, ''own'', ''manual'')',
+    'a signed-in learner books in their own manual car');
+  perform pg_temp.report(
+    exists (select 1 from public.bookings where learner_id = '22222222-2222-2222-2222-222222222222'
+             and starts_at = pg_temp.slot(11, 16) and car = 'own' and gearbox = 'manual'),
+    'and it is stored the same way');
+
+  -- An app still on the old code sends neither, and still books.
+  perform pg_temp.expect_ok(
+    'select public.request_booking(''11111111-1111-1111-1111-111111111111'', pg_temp.slot(13, 16))',
+    'a booking without the two answers still goes through');
 end $$;
