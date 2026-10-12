@@ -92,8 +92,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "PassDrivingTest";
   const options = {
     body: data.body || "Something is waiting in your portal.",
-    icon: "/adi-icon-192.png",
-    badge: "/adi-icon-192.png",
+    icon: "/adi-icon-192-v2.png",
+    badge: "/adi-icon-192-v2.png",
     // Collapses repeats: three messages in a thread replace each other
     // rather than stacking three identical banners.
     tag: data.tag || "pdt-notify",
