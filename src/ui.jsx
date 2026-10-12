@@ -24,7 +24,7 @@ import { useTheme } from "./theme";
    The image therefore carries no words, so its alt is empty and the text below
    is the accessible name — otherwise a screen reader announces the brand
    twice. */
-export function Logo({ size = "md", className = "" }) {
+export function Logo({ size = "md", className = "", icon = true }) {
   const heights = {
     sm: "h-12",
     md: "h-16",
@@ -39,12 +39,14 @@ export function Logo({ size = "md", className = "" }) {
   };
   return (
     <div className={`flex flex-col items-center ${className}`}>
-      <img
-        src="/logo.png"
-        alt=""
-        className={`${heights[size] || heights.md} w-auto`}
-        draggable={false}
-      />
+      {icon && (
+        <img
+          src="/logo.png"
+          alt=""
+          className={`${heights[size] || heights.md} w-auto`}
+          draggable={false}
+        />
+      )}
       <span
         className={`${words[size] || words.md} mt-2 font-extrabold tracking-tight
                     text-white whitespace-nowrap`}

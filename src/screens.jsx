@@ -53,7 +53,7 @@ const SECTION_ICON = {
    HOME
    =========================================================================== */
 export function HomeScreen({ go }) {
-  const { displayName, subscription, isGuest, exitGuest } = useAuth();
+  const { displayName, isSignedIn, subscription, isGuest, exitGuest } = useAuth();
   const { getSection, getModule, overall } = useProgress();
   const [lockedPrompt, setLockedPrompt] = React.useState(null);
 
@@ -78,7 +78,12 @@ export function HomeScreen({ go }) {
           style={{ paddingTop: "max(1.5rem, calc(env(safe-area-inset-top) + 0.875rem))" }}
         >
           <div className="flex justify-center">
-            {/* The logo is the way back out to the public site.
+            {/* The wordmark is the way back out to the public site. No icon
+                here — this is the home screen itself, not a place that needs
+                to announce the brand with artwork, and the wheel icon just
+                duplicated what the app icon on the learner's home screen
+                already shows. The text alone still does the job: it is the
+                accessible name, and the link behaviour below is unchanged.
 
                 target="_blank" matters more than it looks: when the app is
                 running as an installed home-screen app there is no address
@@ -98,11 +103,13 @@ export function HomeScreen({ go }) {
               aria-label="PassDrivingTest.ie — about the Driver Theory Test"
               className="inline-block"
             >
-              <Logo size="md" />
+              <Logo size="md" icon={false} />
             </a>
           </div>
-          <p className="mt-4 text-slate-400 text-sm">Hi {displayName} 👋</p>
-          <h1 className="mt-0.5 text-2xl font-black tracking-tight">Driver Theory Test</h1>
+          <p className="mt-4 text-slate-400 text-sm">
+            {isSignedIn ? `Welcome back, ${displayName} 👋` : `Hi ${displayName} 👋`}
+          </p>
+          <h1 className="mt-0.5 text-2xl font-black tracking-tight">Practice Theory Test</h1>
           <p className="mt-1 text-sm text-slate-400">
             Car &amp; category B — 40 questions, 35 to pass
           </p>
