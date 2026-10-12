@@ -122,6 +122,19 @@ export function isDayOff(key, timeOff) {
   return (timeOff || []).some(t => key >= t.starts_on && key <= t.ends_on);
 }
 
+/* "MON" on its own is a template, not a day — it only becomes one the next
+   time it comes around. This is that date: today if today is a match,
+   otherwise the next one, up to six days out. It is a label, not a
+   calculation anything else here depends on; the actual slot maths in
+   openSlots() and sql/12's open_slots() both work from `hours` and a real
+   date directly and never go through this. */
+export function nextDateFor(weekday, from = new Date()) {
+  const d = new Date(from);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + ((Number(weekday) - d.getDay() + 7) % 7));
+  return d;
+}
+
 /* ------------------------------------------------------------------------- */
 /* The slots                                                                  */
 /* ------------------------------------------------------------------------- */

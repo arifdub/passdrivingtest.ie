@@ -31,7 +31,7 @@ import {
   loadAvailability, addHours, removeHours, replaceWeek, setDayHours,
   addTimeOff, removeTimeOff, saveRules,
   WEEKDAYS, WEEK_ORDER, TYPICAL_WEEK, DEFAULT_RULES,
-  hoursLabel, weeklyHours, openSlots, dateKey,
+  hoursLabel, weeklyHours, openSlots, dateKey, nextDateFor,
   hourGridRange, blocksToHourSet, hourSetToBlocks,
 } from "./availabilityStore";
 
@@ -161,9 +161,18 @@ export default function Availability() {
               className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5"
             >
               <div className="flex items-start gap-3">
-                <p className="w-11 shrink-0 pt-0.5 text-xs font-bold uppercase tracking-widest text-slate-400">
-                  {DAY[id].short}
-                </p>
+                <div className="w-12 shrink-0 pt-0.5">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                    {DAY[id].short}
+                  </p>
+                  {/* The next date this weekday falls on — a template row
+                      labelled only "MON" doesn't say which Monday, and that
+                      is exactly the ambiguity an instructor can't resolve by
+                      looking at it. */}
+                  <p className="text-[10px] font-semibold text-slate-400/70 tabular-nums">
+                    {nextDateFor(id).toLocaleDateString("en-IE", { day: "numeric", month: "short" })}
+                  </p>
+                </div>
 
                 <div className="flex-1 min-w-0">
                   {blocks.length ? (

@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest";
 import {
   toMinutes, fromMinutes, trimTime, blockHours, weeklyHours, overlaps,
   dateKey, isDayOff, openSlots, DEFAULT_RULES, TYPICAL_WEEK, WEEK_ORDER,
-  hourGridRange, blocksToHourSet, hourSetToBlocks,
+  hourGridRange, blocksToHourSet, hourSetToBlocks, nextDateFor,
 } from "../instructor/availabilityStore";
 
 /* 2026-10-13 is a Tuesday. getDay() === 2. */
@@ -216,6 +216,33 @@ describe("the hourly picker", () => {
     ];
     const on = blocksToHourSet(split, 6, 22);
     expect(hourSetToBlocks(on)).toEqual(split);
+  });
+});
+
+describe("which date a weekday row means", () => {
+  /* 2026-10-13 is a Tuesday (getDay() === 2), matching the TUE constant used
+     for the slot-maths tests above. */
+  const TUE = new Date(2026, 9, 13);
+
+  it("is today when today itself is a match", () => {
+    expect(dateKey(nextDateFor(2, TUE))).toBe("2026-10-13");
+  });
+
+  it("is the next occurrence, not last week's", () => {
+    /* Monday is behind Tuesday in the week, so this has to roll forward
+       almost a full week rather than landing on the Monday just gone. */
+    expect(dateKey(nextDateFor(1, TUE))).toBe("2026-10-19");
+  });
+
+  it("is tomorrow when tomorrow is a match", () => {
+    expect(dateKey(nextDateFor(3, TUE))).toBe("2026-10-14");
+  });
+
+  it("never looks more than six days out", () => {
+    const monday = nextDateFor(1, TUE);
+    const diffDays = Math.round((monday - TUE) / 86400000);
+    expect(diffDays).toBeLessThanOrEqual(6);
+    expect(diffDays).toBeGreaterThanOrEqual(0);
   });
 });
 
