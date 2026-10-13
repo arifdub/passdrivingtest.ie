@@ -293,7 +293,7 @@ export default function InstructorPortal({ onExitRole }) {
       <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 text-white">
         <div
           className="max-w-5xl mx-auto px-5 pb-4"
-          style={{ paddingTop: "max(1rem, calc(env(safe-area-inset-top) + 0.6rem))" }}
+          style={{ paddingTop: "max(1.5rem, calc(env(safe-area-inset-top) + 1.1rem))" }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex items-center gap-2">
@@ -363,7 +363,7 @@ export default function InstructorPortal({ onExitRole }) {
           room, so this reserve shrank with it — still clear of the bar,
           just not by as much as it was. */}
       <div
-        className="max-w-5xl mx-auto px-5 pt-4"
+        className="max-w-5xl mx-auto px-5 pt-5"
         style={{ paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
       >
         {section === "dashboard"
