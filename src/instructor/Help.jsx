@@ -9,7 +9,7 @@
 import React, { useState } from "react";
 import {
   ChevronDown, Link2, CalendarCheck, Clock, Users, Banknote, BellRing,
-  Smartphone, MessageSquare, ShieldCheck,
+  Smartphone, MessageSquare, ShieldCheck, Megaphone,
 } from "lucide-react";
 
 export const TOPICS = [
@@ -37,6 +37,14 @@ export const TOPICS = [
       "Specific dates are for one date only: they replace that day's usual hours on that date and nowhere else.",
       "Time off blocks whole days. Booking terms set the lesson length, notice needed, how far ahead learners can book and travel time between lessons.",
       "Learners are offered start times one lesson length apart. A 60-minute lesson gives 9:00, 10:00, 11:00.",
+    ],
+  },
+  {
+    id: "requests", icon: Megaphone, title: "Learner requests",
+    body: [
+      "Learners who can't find a suitable instructor or time post what they need: their area, the kind of lesson, their driving level, whose car and when suits.",
+      "Find them under Learner requests, from Quick Actions or More on your dashboard. Your counties are shown first; All counties shows everyone.",
+      "Tap Message to introduce yourself. They get it in their app and by email, and can reply. Only their first name is shown until they choose to share more.",
     ],
   },
   {

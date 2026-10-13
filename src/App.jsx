@@ -28,10 +28,10 @@ import {
   BrowserRouter, Routes, Route, Navigate, useNavigate, useParams,
 } from "react-router-dom";
 import {
-  Home as HomeIcon, BookOpen, Timer, TrendingUp, User, Loader2, Lock,
+  Home as HomeIcon, BookOpen, Loader2, Lock, CarFront, MessageSquare,
   /* Aliased: react-router exports a <Route> too, and the collision is a
      build error, not a warning. */
-  Settings as SettingsIcon, Route as RouteIcon, ArrowRight, AlertCircle,
+  Route as RouteIcon, ArrowRight, AlertCircle,
 } from "lucide-react";
 import { AuthProvider, useAuth } from "./appAuth";
 import { PlatformProvider, usePlatform } from "./platform";
@@ -46,7 +46,13 @@ import StudentJourney from "./StudentJourney";
 import FindInstructor from "./FindInstructor";
 import InstructorPortal from "./instructor/InstructorPortal";
 import AdminPortal from "./admin/AdminPortal";
-import { HomeScreen, MockHubScreen, ProgressScreen, ProfileScreen } from "./screens";
+import { ProfileScreen } from "./screens";
+import HomeDashboard from "./student/HomeDashboard";
+import StudyScreen from "./student/StudyScreen";
+import LessonsScreen from "./student/LessonsScreen";
+import MessagesScreen from "./student/MessagesScreen";
+import ConversationScreen from "./student/ConversationScreen";
+import { loadInbox } from "./student/inbox";
 import QuizPlayer from "./QuizPlayer";
 import FlashcardPlayer from "./FlashcardPlayer";
 import { SECTION_BY_ID, buildMockTest } from "./theorySections";
@@ -54,46 +60,44 @@ import { MOCKS, MOCK_BY_ID, DECK_BY_ID, PASS_MARK, lockedForGuest } from "./appS
 import { getDeck } from "./contentSources";
 import { EmptyState, Logo } from "./ui";
 
-/* The tab ids double as screen ids, so a tab's id must not collide with a
-   screen that means something else. "mocks" (the list) is deliberately not
-   "mock" (a paper being sat) — one tap of the tab would otherwise drop the
-   learner straight into a 90-minute timed exam. */
-const TABS = [
-  { id: "home",     label: "Home",      icon: HomeIcon },
-  /* The journey sits between the theory section and the exam, which is where
-     it belongs in the product too: it is the map that explains why the
-     theory section is the first thing a learner sees. */
-  { id: "journey",  label: "Journey",   icon: RouteIcon },
-  /* "Mocks", not "Mock Test": with five tabs the longer label wraps onto two
-     lines on a 320px phone and makes that one tab taller than its
-     neighbours. Only the label changed — the screen id stays "mocks", which
-     is what the routing and the tab/route mapping are keyed on. */
-  { id: "mocks",    label: "Mocks",     icon: Timer },
-  { id: "progress", label: "Progress",  icon: TrendingUp },
-  /* The screen id stays "profile" deliberately — it's only the label that
-     changed, and renaming the route would break the tab/route mapping for no
-     gain. The screen still shows the account details; Settings is simply a
-     better name for what people come here to do. */
-  { id: "profile",  label: "Settings",  icon: SettingsIcon },
+/* The learner app is for every learner now, not only the theory test.
+
+   Home     — the dashboard: next lesson, shortcuts, theory and journey at a glance
+   Study    — all the theory: topics, flashcards, mock tests, progress
+   Lessons  — find and book an instructor, or post a lesson request
+   Messages — conversations with instructors
+   Journey  — the road from theory to full licence
+
+   The account — profile, settings, sign out — is the photo top-right on
+   every tab, as in the instructor portal, so it no longer needs a tab. */
+export const TABS = [
+  { id: "home",     label: "Home",     icon: HomeIcon },
+  { id: "study",    label: "Study",    icon: BookOpen },
+  { id: "lessons",  label: "Lessons",  icon: CarFront },
+  { id: "messages", label: "Messages", icon: MessageSquare },
+  { id: "journey",  label: "Journey",  icon: RouteIcon },
 ];
+
+/* Older screen names, from links inside screens (and the journey) that
+   predate the new tabs, mapped to where those things live now. "mock" (a
+   paper being sat) is NOT here: that one is a real screen. */
+export function normaliseView(view) {
+  switch (view.screen) {
+    case "mocks":       return { screen: "study", segment: "mocks" };
+    case "progress":    return { screen: "study", segment: "progress" };
+    case "instructors": return { screen: "lessons", segment: "find" };
+    default:            return view;
+  }
+}
 
 /* ===========================================================================
    NAVIGATION SHELL
    =========================================================================== */
 function AppShell() {
-  const { journeyStage } = usePlatform();
-
-  /* WHERE A LEARNER LANDS DEPENDS ON WHAT THEY TOLD US.
-
-     Someone studying for the theory test should open straight into the thing
-     they came for — the topics and the questions — with no map in the way.
-
-     Everyone else said they are past it: they hold a permit, they're doing
-     EDT, they need a car for test day. Opening those five on a theory-test
-     home screen tells them this app isn't for them. They get the journey
-     instead, which shows where they are, says plainly which parts aren't
-     built yet, and still offers the theory section. */
-  const startTab = journeyStage && journeyStage !== "theory" ? "journey" : "home";
+  /* Everyone lands on Home. It used to be the theory topics for theory
+     learners and the journey for everyone else; the dashboard now serves
+     both, with Study one tap away. */
+  const startTab = "home";
 
   const [tab, setTab] = useState(startTab);
   const [stack, setStack] = useState([{ screen: startTab }]);
@@ -105,9 +109,34 @@ function AppShell() {
      changed it — and the portal account menu changes it. */
   const { theme, toggleTheme } = useTheme();
 
-  const go = useCallback((view) => {
-    setStack(s => [...s, view]);
+  /* Unread messages, for the badge on the Messages tab. Refreshed by the
+     screens that already load the inbox, and on every tab change. */
+  const { user, isGuest } = useAuth();
+  const [unread, setUnread] = useState(0);
+  const refreshUnread = useCallback(() => {
+    if (isGuest || !user?.id) return;
+    loadInbox(user.id).then(b => setUnread(b.unread)).catch(() => {});
+  }, [user?.id, isGuest]);
+  useEffect(() => { refreshUnread(); }, [refreshUnread, tab]);
+
+  /* Going to a tab's own screen switches tab rather than stacking it, so
+     "Find an instructor" from Home lands on the Lessons tab with a working
+     tab bar, not a Lessons screen with a back button on top of Home. */
+  const go = useCallback((raw) => {
+    const view = normaliseView(raw);
+    if (TABS.some(t => t.id === view.screen)) {
+      setTab(view.screen);
+      setStack([view]);
+    } else {
+      setStack(s => [...s, view]);
+    }
     window.scrollTo(0, 0);
+  }, []);
+
+  /* A part of a tab (Study's mocks, Lessons' requests) is part of its root
+     view, so going back to the tab keeps it. */
+  const setSegment = useCallback((segment) => {
+    setStack(s => [{ ...s[0], segment }, ...s.slice(1)]);
   }, []);
 
   const back = useCallback(() => {
@@ -180,13 +209,15 @@ function AppShell() {
       onPointerCancel={() => { swipe.current = null; }}
     >
       <div className="app-content">
-        <CurrentScreen view={view} go={go} back={back} theme={theme} toggleTheme={toggleTheme} />
+        <CurrentScreen view={view} go={go} back={back} theme={theme} toggleTheme={toggleTheme}
+          setSegment={setSegment} onUnread={setUnread} refreshUnread={refreshUnread} />
       </div>
       <TabBar
         tab={activeTab}
         onSelect={selectTab}
         hidden={tabsHidden}
         onMeasure={setTabBarHeight}
+        badges={{ messages: unread }}
       />
     </div>
   );
@@ -195,7 +226,8 @@ function AppShell() {
 /* Quiz runs and flashcard decks take over the screen — the tab bar would only
    be a way to lose your place mid-test. */
 function isFullScreen(view) {
-  return view.screen === "section" || view.screen === "mock" || view.screen === "deck";
+  return view.screen === "section" || view.screen === "mock" || view.screen === "deck"
+    || view.screen === "conversation";
 }
 
 /* ===========================================================================
@@ -204,7 +236,7 @@ function isFullScreen(view) {
    Flatter than before. The app is now home -> section, home -> mock, or
    home -> deck. There are no nested paths left to walk through.
    =========================================================================== */
-function CurrentScreen({ view, go, back, theme, toggleTheme }) {
+function CurrentScreen({ view, go, back, theme, toggleTheme, setSegment, onUnread, refreshUnread }) {
   const { isGuest, exitGuest } = useAuth();
   const navigate = useNavigate();
 
@@ -220,7 +252,20 @@ function CurrentScreen({ view, go, back, theme, toggleTheme }) {
 
   switch (view.screen) {
     case "home":
-      return <HomeScreen go={go} />;
+      return <HomeDashboard go={go} onUnread={onUnread} />;
+
+    /* All the theory: topics and flashcards, mock tests, progress. */
+    case "study":
+      return <StudyScreen go={go} segment={view.segment || "practice"} onSegment={setSegment} />;
+
+    case "lessons":
+      return <LessonsScreen go={go} segment={view.segment || "find"} onSegment={setSegment} />;
+
+    case "messages":
+      return <MessagesScreen go={go} onUnread={onUnread} />;
+
+    case "conversation":
+      return <ConversationScreen view={view} back={back} onRead={refreshUnread} />;
 
     /* The whole road, theory to full licence, and what to do next. */
     case "journey":
@@ -231,16 +276,9 @@ function CurrentScreen({ view, go, back, theme, toggleTheme }) {
         />
       );
 
-    /* The Mock Test tab — the list of papers and how ready you are. Note the
-       plural: "mock" below is a paper actually being sat. */
-    case "mocks":
-      return <MockHubScreen go={go} />;
-
-    case "progress":
-      return <ProgressScreen go={go} />;
-
+    /* Behind the photo in the top-right of every tab. */
     case "profile":
-      return <ProfileScreen theme={theme} toggleTheme={toggleTheme} />;
+      return <ProfileScreen theme={theme} toggleTheme={toggleTheme} onBack={back} />;
 
     /* One of the six study topics — practice its questions. */
     case "section": {
@@ -320,7 +358,7 @@ function CurrentScreen({ view, go, back, theme, toggleTheme }) {
     }
 
     default:
-      return <HomeScreen go={go} />;
+      return <HomeDashboard go={go} onUnread={onUnread} />;
   }
 }
 
@@ -377,7 +415,7 @@ function NotReady({ onBack }) {
 /* ===========================================================================
    TAB BAR
    =========================================================================== */
-function TabBar({ tab, onSelect, hidden, onMeasure }) {
+function TabBar({ tab, onSelect, hidden, onMeasure, badges = {} }) {
   const ref = useRef(null);
 
   /* Reports its own height, including the home-indicator spacer below the
@@ -412,7 +450,14 @@ function TabBar({ tab, onSelect, hidden, onMeasure }) {
                   : "text-slate-400 dark:text-slate-500"
               }`}
             >
-              <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+              <span className="relative">
+                <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+                {badges[id] > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 rounded-full bg-red-500 text-white text-[10px] font-black min-w-[16px] h-4 px-1 inline-flex items-center justify-center tabular-nums">
+                    {badges[id] > 9 ? "9+" : badges[id]}
+                  </span>
+                )}
+              </span>
               <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
             </button>
           );

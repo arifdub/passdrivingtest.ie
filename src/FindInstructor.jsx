@@ -30,7 +30,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Search, MapPin, Car, BadgeCheck, Loader2, AlertCircle, Check, X,
-  MessageSquare, SlidersHorizontal, CalendarCheck, Star,
+  MessageSquare, SlidersHorizontal, CalendarCheck, Star, Megaphone,
 } from "lucide-react";
 import { useAuth } from "./appAuth";
 import { ScreenHeader, EmptyState, PrimaryButton, SecondaryButton } from "./ui";
@@ -45,7 +45,8 @@ import { initialsFor } from "./avatars";
 import { ratingsFor, ratingLabel, listReviews, canReview } from "./socialStore";
 import { myBookings } from "./bookingStore";
 
-export default function FindInstructor({ onBack }) {
+/* `embedded` is the Lessons tab, which draws its own header. */
+export default function FindInstructor({ onBack, embedded = false, onPostRequest }) {
   const { user, isGuest, displayName } = useAuth();
 
   const [county, setCounty] = useState("");
@@ -116,10 +117,10 @@ export default function FindInstructor({ onBack }) {
   useEffect(() => { countiesWithInstructors().then(setCounties); }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      <ScreenHeader title="Find an instructor" onBack={onBack} />
+    <div className={embedded ? "" : "min-h-screen bg-slate-50 dark:bg-slate-900"}>
+      {!embedded && <ScreenHeader title="Find an instructor" onBack={onBack} />}
 
-      <div className="max-w-2xl mx-auto px-5 py-5">
+      <div className={embedded ? "" : "max-w-2xl mx-auto px-5 py-5"}>
         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
           Every instructor here has had their ADI number checked against the
           RSA register by a person. Nobody appears until that is done.
@@ -186,6 +187,19 @@ export default function FindInstructor({ onBack }) {
           ))}
         </div>
       </div>
+
+      {/* Nobody near, or nobody with a time that suits: the learner can say
+          what they need instead (sql/32). */}
+      {onPostRequest && !loading && (
+        <button onClick={onPostRequest}
+          className="mt-5 w-full text-left rounded-2xl border border-dashed border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 p-4 flex items-center gap-3">
+          <Megaphone size={20} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <span className="flex-1">
+            <span className="block text-sm font-bold text-slate-900 dark:text-white">Nobody suitable?</span>
+            <span className="block text-sm text-slate-600 dark:text-slate-300">Post a lesson request and let instructors come to you.</span>
+          </span>
+        </button>
+      )}
 
       {reviewing && (
         <ReviewSheet

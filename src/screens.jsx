@@ -41,6 +41,12 @@ import { setLearnerPhoto } from "./avatars";
 import DeleteAccountCard from "./DeleteAccountCard";
 import AccountSecurity from "./AccountSecurity";
 
+/* A screen's own page, or — inside the Study tab, which draws the header and
+   the page itself — just its content. */
+function Body({ embedded, children }) {
+  return embedded ? <>{children}</> : <Screen>{children}</Screen>;
+}
+
 const SECTION_ICON = {
   "dtt.sec.rules": ClipboardCheck,
   "dtt.sec.signs": Truck,
@@ -53,7 +59,7 @@ const SECTION_ICON = {
 /* ===========================================================================
    HOME
    =========================================================================== */
-export function HomeScreen({ go }) {
+export function PracticeScreen({ go, embedded = false }) {
   const { displayName, isSignedIn, subscription, isGuest, exitGuest } = useAuth();
   const { getSection, getModule, overall } = useProgress();
   const [lockedPrompt, setLockedPrompt] = React.useState(null);
@@ -73,6 +79,7 @@ export function HomeScreen({ go }) {
 
   return (
     <>
+      {!embedded && (
       <div className="bg-slate-900 text-white">
         <div
           className="max-w-2xl mx-auto px-5 pb-6"
@@ -116,10 +123,11 @@ export function HomeScreen({ go }) {
           </p>
         </div>
       </div>
+      )}
 
-      <Screen>
+      <Body embedded={embedded}>
         {/* Overall coverage */}
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-4 -mt-10 shadow-lg">
+        <div className={`bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-4 ${embedded ? "" : "-mt-10 shadow-lg"}`}>
           <ProgressRing pct={overall.coveragePct} size={72} stroke={6} label="covered" />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
@@ -249,9 +257,10 @@ export function HomeScreen({ go }) {
           })}
         </div>
 
-        {/* Mock tests — kept here as well as on their own tab. The tab is
-            where the readiness breakdown lives; this is the shortcut for
-            someone already on the home screen. */}
+        {/* Mock tests — standalone only. Inside Study they have their own
+            part, one tap away in the header, and listing them twice there
+            is just more to scroll past. */}
+        {!embedded && (<>
         <div className="mt-6 mb-3 flex items-baseline justify-between gap-3">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
             Exam conditions
@@ -317,6 +326,7 @@ export function HomeScreen({ go }) {
             );
           })}
         </div>
+        </>)}
 
         {/* Flashcards */}
         <div className="mt-6 mb-3">
@@ -412,7 +422,7 @@ export function HomeScreen({ go }) {
             </span>
           </p>
         )}
-      </Screen>
+      </Body>
 
       {/* Shown when a guest taps something they don't have yet. A sheet rather
           than a redirect, so they can dismiss it and carry on with Section 1
@@ -480,7 +490,7 @@ export function HomeScreen({ go }) {
    do about it, then the papers. Someone opening this tab wants to know where
    they stand before they pick a paper.
    =========================================================================== */
-export function MockHubScreen({ go }) {
+export function MockHubScreen({ go, embedded = false }) {
   const { getModule, mockReadiness } = useProgress();
   const { isGuest, exitGuest } = useAuth();
 
@@ -499,11 +509,13 @@ export function MockHubScreen({ go }) {
   if (isGuest) {
     return (
       <>
-        <ScreenHeader
-          title="Mock Test"
-          subtitle="Full exam conditions"
-        />
-        <Screen>
+        {!embedded && (
+          <ScreenHeader
+            title="Mock Test"
+            subtitle="Full exam conditions"
+          />
+        )}
+        <Body embedded={embedded}>
           <ExamConditionsCard />
           <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 text-center">
             <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
@@ -521,18 +533,20 @@ export function MockHubScreen({ go }) {
               <PrimaryButton onClick={exitGuest}>Create a free account</PrimaryButton>
             </div>
           </div>
-        </Screen>
+        </Body>
       </>
     );
   }
 
   return (
     <>
-      <ScreenHeader
-        title="Mock Test"
-        subtitle={`${MOCK_LENGTH} questions · ${MOCK_MINUTES} minutes · ${PASS_QUESTIONS} to pass`}
-      />
-      <Screen>
+      {!embedded && (
+        <ScreenHeader
+          title="Mock Test"
+          subtitle={`${MOCK_LENGTH} questions · ${MOCK_MINUTES} minutes · ${PASS_QUESTIONS} to pass`}
+        />
+      )}
+      <Body embedded={embedded}>
         {/* ---- 1. Where you stand ---- */}
         {!r.hasData ? (
           <div className="bg-slate-900 rounded-2xl p-5">
@@ -690,7 +704,7 @@ export function MockHubScreen({ go }) {
             first one is more useful than no first one.
           </p>
         )}
-      </Screen>
+      </Body>
     </>
   );
 }
@@ -811,7 +825,7 @@ function hasPausedAttempt(moduleId) {
 /* ===========================================================================
    PROGRESS
    =========================================================================== */
-export function ProgressScreen({ go }) {
+export function ProgressScreen({ go, embedded = false }) {
   const { getSection, getModule, overall } = useProgress();
 
   /* Combined flashcard progress across every deck. Counted from the real
@@ -828,8 +842,8 @@ export function ProgressScreen({ go }) {
 
   return (
     <>
-      <ScreenHeader title="My Progress" subtitle="Across all six topics" />
-      <Screen>
+      {!embedded && <ScreenHeader title="My Progress" subtitle="Across all six topics" />}
+      <Body embedded={embedded}>
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-5">
           <ProgressRing pct={overall.coveragePct} size={84} stroke={7} label="covered" />
           <div className="flex-1 grid grid-cols-2 gap-3">
@@ -940,7 +954,7 @@ export function ProgressScreen({ go }) {
             )}
           </>
         )}
-      </Screen>
+      </Body>
     </>
   );
 }
@@ -1111,7 +1125,7 @@ function InstallStep({ n, children }) {
 /* ===========================================================================
    PROFILE
    =========================================================================== */
-export function ProfileScreen({ theme, toggleTheme }) {
+export function ProfileScreen({ theme, toggleTheme, onBack }) {
   const { profile, displayName, subscription, signOut, mode, isGuest, exitGuest, user, refreshProfile } = useAuth();
   const { accountRoles, isAdminAccount } = usePlatform();
   const otherPortals = portalsFor({ accountRoles, isAdminAccount, here: "student" });
@@ -1137,7 +1151,7 @@ export function ProfileScreen({ theme, toggleTheme }) {
 
   return (
     <>
-      <ScreenHeader title="Settings" />
+      <ScreenHeader title="Profile & settings" onBack={onBack} />
       <Screen>
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
           <div className="flex items-center gap-4">

@@ -26,7 +26,7 @@ import {
   Home, Calendar, Users, CalendarCheck, Clock, Store, Wallet, Star,
   MessageSquare, UserCircle, ShieldCheck, ShieldAlert, Clock3,
   Loader2, Pencil, Bell, ChevronRight, ChevronLeft, Plus, CalendarPlus,
-  UserPlus, Zap, CalendarClock, LogOut, GraduationCap, HelpCircle,
+  UserPlus, Zap, CalendarClock, LogOut, GraduationCap, HelpCircle, Megaphone,
 } from "lucide-react";
 import {
   PrimaryButton, SecondaryButton, AccountMenu, VerifiedBadge, useDismiss,
@@ -50,6 +50,7 @@ import Reviews from "./Reviews";
 import Messages from "./Messages";
 import Account from "./Account";
 import Help from "./Help";
+import LearnerRequests from "./LearnerRequests";
 import { receivedEnquiries } from "../marketplace";
 import { receivedBookings, isPast } from "../bookingStore";
 import {
@@ -102,6 +103,7 @@ const QUICK = [
 
 /* Reached from home, under More. Not lesser — just not daily. */
 const MORE = [
+  { id: "requests",    label: "Learner requests", icon: Megaphone },
   { id: "marketplace", label: "Marketplace",  icon: Store },
   { id: "earnings",    label: "Earnings",     icon: Wallet },
   { id: "reviews",     label: "Reviews",      icon: Star },
@@ -113,7 +115,7 @@ const TITLES = {
   students: "Students", calendar: "Calendar", account: "Account",
   enquiries: "Enquiries", bookings: "Bookings", availability: "Availability",
   marketplace: "Marketplace", earnings: "Earnings", reviews: "Reviews",
-  messages: "Messages", help: "Help",
+  messages: "Messages", help: "Help", requests: "Learner requests",
 };
 
 const BLURBS = {
@@ -128,6 +130,7 @@ const BLURBS = {
   messages: "Talk to a student about a lesson.",
   account: "Your details and verification.",
   help: "How the portal works.",
+  requests: "Learners looking for an instructor.",
 };
 
 
@@ -415,6 +418,7 @@ export default function InstructorPortal({ onExitRole }) {
           : section === "reviews" ? <Reviews />
           : section === "messages" ? <Messages onRead={recount} />
           : section === "help" ? <Help />
+          : section === "requests" ? <LearnerRequests onRead={recount} />
           : section === "account" ? (
               <Account
                 loading={loading}
@@ -744,6 +748,7 @@ export function InstructorDashboard({
           <div className="space-y-2">
             <Action icon={UserPlus}     tone="emerald" label="Add New Student"   onClick={() => onGo("students")} />
             <Action icon={CalendarPlus} tone="blue"    label="Add Lesson"        onClick={() => onGo("calendar")} />
+            <Action icon={Megaphone}    tone="violet" label="Learners Looking for Lessons" onClick={() => onGo("requests")} />
             <Action icon={MessageSquare} tone="violet" label="View Enquiries"    onClick={() => onGo("enquiries")} />
             <Action icon={Clock}        tone="amber"   label="Check Availability" onClick={() => onGo("availability")} />
           </div>

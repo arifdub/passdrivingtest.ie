@@ -555,6 +555,37 @@ async function compose(kind, id) {
     };
   }
 
+  /* A message on a lesson request (sql/32). The instructor writes first;
+     the learner can answer. Whoever did not send it is told. */
+  if (kind === "request_message") {
+    const { data: m } = await db.from("request_messages")
+      .select("id, request_id, instructor_id, sender_id, body").eq("id", id).single();
+    if (!m) return null;
+    const { data: r } = await db.from("lesson_requests")
+      .select("learner_id, county, area").eq("id", m.request_id).single();
+    if (!r) return null;
+
+    const toInstructor = m.sender_id !== m.instructor_id;
+    const to = toInstructor ? m.instructor_id : r.learner_id;
+    if (!to || to === m.sender_id) return null;
+    const from = await nameOf(m.sender_id);
+    const go = toInstructor ? "/adi" : "/student";
+    return {
+      to,
+      go,
+      subject: toInstructor
+        ? `${from} replied about lessons`
+        : `${from} answered your lesson request`,
+      push: { title: from, body: m.body.slice(0, 120) },
+      html: wrap(toInstructor ? `${from} replied` : `An instructor answered your lesson request`,
+        `<p style="margin:0 0 10px;color:#334155;line-height:1.6"><strong>${esc(from)}</strong>${
+           toInstructor ? "" : " saw your request for lessons" + (r.area || r.county ? ` in ${esc(r.area || r.county)}` : "")} and wrote:</p>
+         <p style="margin:0;padding:14px;background:#f1f5f9;border-radius:12px;color:#334155;line-height:1.6">${esc(m.body)}</p>`,
+        toInstructor ? "Reply in the portal" : "Reply in the app",
+        { go, audience: toInstructor ? "instructor" : "learner" }),
+    };
+  }
+
   if (kind === "enquiry") {
     const { data: e } = await db.from("instructor_enquiries")
       .select("id, instructor_id, learner_name, area, message, status")

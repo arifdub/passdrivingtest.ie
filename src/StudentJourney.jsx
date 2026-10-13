@@ -36,6 +36,7 @@ import { useProgress } from "./progressStore";
 import { useAuth } from "./appAuth";
 import { usePlatform, JOURNEY_PATH, reachedIndexFor } from "./platform";
 import { PASS_MARK } from "./appStructure";
+import StudentAccount from "./student/StudentAccount";
 
 const ICONS = {
   theory: BookOpen,
@@ -56,7 +57,7 @@ const ICONS = {
 const BUILT = new Set(["theory", "mock", "edt"]);
 
 /* Which screen each built milestone opens. */
-const OPENS = { theory: "home", mock: "mocks", edt: "instructors" };
+const OPENS = { theory: "study", mock: "mocks", edt: "lessons" };
 
 export default function StudentJourney({ go, onChangeStage }) {
   const { isGuest } = useAuth();
@@ -76,7 +77,10 @@ export default function StudentJourney({ go, onChangeStage }) {
           className="max-w-2xl mx-auto px-5 pb-6"
           style={{ paddingTop: "max(1.5rem, calc(env(safe-area-inset-top) + 0.875rem))" }}
         >
-          <h1 className="text-2xl font-black tracking-tight">My driving journey</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-black tracking-tight">My driving journey</h1>
+            <StudentAccount go={go} />
+          </div>
           <p className="mt-1 text-sm text-slate-400">
             Theory to full licence, and where you are on it.
           </p>
@@ -182,7 +186,7 @@ function NextStep({ milestone, overall, mockReadiness, go }) {
       <div className="mt-4">
         {built ? (
           <PrimaryButton
-            onClick={() => go({ screen: OPENS[milestone.id] || "home" })}
+            onClick={() => go({ screen: OPENS[milestone.id] || "study" })}
           >
             {milestone.id === "mock" ? "Sit a mock test" : "Continue learning"}
           </PrimaryButton>
@@ -193,7 +197,7 @@ function NextStep({ milestone, overall, mockReadiness, go }) {
               theory section is open and your progress is being kept.
             </p>
             <button
-              onClick={() => go({ screen: "home" })}
+              onClick={() => go({ screen: "study" })}
               className="mt-2.5 text-sm font-bold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1"
             >
               Go to the theory section <ChevronRight size={15} />
@@ -236,7 +240,7 @@ function MilestoneRow({ milestone, position, currentIndex, overall, mockReadines
     <button
       onClick={() => {
         if (!openable) return;
-        go({ screen: OPENS[milestone.id] || "home" });
+        go({ screen: OPENS[milestone.id] || "study" });
       }}
       disabled={!openable}
       className={`w-full text-left bg-white dark:bg-slate-800 border rounded-2xl p-4 transition ${

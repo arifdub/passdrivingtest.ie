@@ -1322,3 +1322,99 @@ begin
     not has_function_privilege('anon', 'public.booking_learners(uuid[])', 'execute'),
     'and nobody signed out can call it at all');
 end $$;
+
+-- --------------------------------------------------------------------------
+-- Lesson requests: learners post, instructors answer (sql/32)
+-- --------------------------------------------------------------------------
+do $$
+declare
+  adi  constant uuid := '11111111-1111-1111-1111-111111111111';
+  amy  constant uuid := '22222222-2222-2222-2222-222222222222';
+  ben  constant uuid := '33333333-3333-3333-3333-333333333333';
+  post constant text := 'select public.post_lesson_request(''Dublin'', ''Lucan'', ''lesson'', ';
+  v_req  uuid;
+  v_r    record;
+  v_seen int;
+begin
+  delete from public.lesson_requests where learner_id in (amy, ben);
+
+  perform pg_temp.be(amy::text);
+  perform pg_temp.expect_ok(post || '2, ''instructor'', ''manual'', ''Weekday evenings'', ''Nervous starter'')',
+    'a learner posts a lesson request');
+  select id into v_req from public.lesson_requests where learner_id = amy;
+  perform pg_temp.report(
+    (select first_name from public.lesson_requests where id = v_req) = 'amy',
+    'the post carries a first name only');
+
+  perform pg_temp.expect_refused(post || 'null, ''instructor'', ''manual'', null, null)',
+    'a post without a driving level is refused');
+  perform pg_temp.expect_refused(post || '2, ''bus'', ''manual'', null, null)',
+    'a post with a car that is neither is refused');
+  perform pg_temp.expect_ok(post || '3, ''own'', ''automatic'', null, null)', 'a second post');
+  perform pg_temp.expect_ok(post || '3, ''own'', ''automatic'', null, null)', 'a third post');
+  perform pg_temp.expect_refused(post || '3, ''own'', ''automatic'', null, null)',
+    'but not a fourth while three are open');
+
+  -- Only a verified instructor sees the board.
+  perform pg_temp.be(ben::text);
+  perform pg_temp.expect_refused('select * from public.open_lesson_requests()',
+    'a learner cannot read the board');
+  perform pg_temp.be(adi::text);
+  select * into v_r from public.open_lesson_requests('Dublin') where id = v_req;
+  perform pg_temp.report(v_r.first_name = 'amy' and v_r.availability = 'Weekday evenings' and not v_r.messaged,
+    'a verified instructor sees the post with its details');
+  perform pg_temp.report(
+    not exists (select 1 from public.open_lesson_requests('Cork') where id = v_req),
+    'and the county filter leaves it out of another county');
+
+  -- Who can write first.
+  perform pg_temp.be(amy::text);
+  perform pg_temp.expect_refused(format('select public.send_request_message(%L, %L, %L)', v_req, adi, 'hello?'),
+    'the learner cannot start a thread themselves');
+  perform pg_temp.be(ben::text);
+  perform pg_temp.expect_refused(format('select public.send_request_message(%L, %L, %L)', v_req, ben, 'I can teach'),
+    'someone who is not a verified instructor cannot answer');
+  perform pg_temp.be(adi::text);
+  perform pg_temp.expect_refused(format('select public.send_request_message(%L, %L, %L)', v_req, ben, 'as ben'),
+    'an instructor cannot write as another instructor');
+  perform pg_temp.expect_ok(format('select public.send_request_message(%L, %L, %L)', v_req, adi, 'I have evenings free'),
+    'a verified instructor messages the learner');
+  perform pg_temp.report(
+    (select messaged from public.open_lesson_requests('Dublin') where id = v_req),
+    'and the board marks it as messaged');
+
+  perform pg_temp.be(amy::text);
+  select * into v_r from public.my_request_threads() where request_id = v_req;
+  perform pg_temp.report(v_r.i_am = 'learner' and v_r.other_name = 'Aoife Byrne' and v_r.unread = 1,
+    'the learner''s conversation list shows the instructor and one unread');
+  perform pg_temp.expect_ok(format('select public.send_request_message(%L, %L, %L)', v_req, adi, 'Great, Tuesday?'),
+    'the learner replies in that thread');
+  perform public.mark_request_thread_read(v_req, adi);
+  perform pg_temp.report(
+    (select unread from public.my_request_threads() where request_id = v_req) = 0,
+    'opening the thread clears the unread count');
+
+  perform pg_temp.be(adi::text);
+  perform pg_temp.report(
+    (select unread from public.my_request_threads() where request_id = v_req) = 1
+      and (select other_name from public.my_request_threads() where request_id = v_req) = 'amy',
+    'the instructor sees the learner''s reply, by first name');
+
+  -- Nobody else reads it.
+  perform pg_temp.be(ben::text);
+  perform pg_temp.report(not exists (select 1 from public.my_request_threads()),
+    'a third person has no threads');
+  set local role authenticated;
+  select count(*) into v_seen from public.request_messages where request_id = v_req;
+  reset role;
+  perform pg_temp.report(v_seen = 0, 'and cannot read the messages directly');
+
+  -- Closed is closed.
+  perform pg_temp.be(amy::text);
+  update public.lesson_requests set status = 'closed' where id = v_req;
+  perform pg_temp.be(adi::text);
+  perform pg_temp.report(not exists (select 1 from public.open_lesson_requests() where id = v_req),
+    'a closed post leaves the board');
+  perform pg_temp.expect_refused(format('select public.send_request_message(%L, %L, %L)', v_req, adi, 'still there?'),
+    'and nobody new can message about it');
+end $$;

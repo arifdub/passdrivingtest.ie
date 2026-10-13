@@ -188,17 +188,23 @@ export async function unreadByBooking(userId) {
 export async function whatIsWaiting() {
   if (!HAS_SUPABASE) return { counts: null, error: "No database connection." };
 
-  const { data, error } = await supabase.rpc("my_waiting");
+  /* Conversations about lesson requests (sql/32) count as messages too.
+     Read alongside, and ignored if that file has not been run. */
+  const [{ data, error }, threads] = await Promise.all([
+    supabase.rpc("my_waiting"),
+    supabase.rpc("my_request_threads").then(r => (r.error ? [] : r.data || []), () => []),
+  ]);
   if (error) return { counts: null, error: describeSocialError(error) };
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) return { counts: null, error: null };
+  const requestUnread = threads.reduce((n, t) => n + (Number(t.unread) || 0), 0);
 
   return {
     counts: {
       bookingRequests: Number(row.booking_requests) || 0,
       newEnquiries: Number(row.new_enquiries) || 0,
-      unreadMessages: Number(row.unread_messages) || 0,
+      unreadMessages: (Number(row.unread_messages) || 0) + requestUnread,
       lessonsToday: Number(row.lessons_today) || 0,
       /* Arrived since the bell was last opened. Undefined rather than 0 when
          sql/16 has not been run, so the caller can fall back on the

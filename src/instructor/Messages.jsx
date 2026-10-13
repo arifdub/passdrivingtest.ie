@@ -2,14 +2,14 @@
   ===========================================================================
   MESSAGES — the instructor's list of threads
 
-  One thread per live booking. Not an inbox: there is no way to start a
-  conversation with somebody who has not booked with you, and a thread ends
-  with the lesson it belongs to.
+  One thread per live booking, and one per learner request you have
+  answered (sql/32). Not an open inbox: you can only talk to someone who
+  booked with you or who posted a request you replied to.
   ===========================================================================
 */
 
 import React, { useState, useEffect, useCallback } from "react";
-import { MessageSquare, Loader2, AlertCircle, ChevronRight } from "lucide-react";
+import { MessageSquare, Loader2, AlertCircle, ChevronRight, Megaphone } from "lucide-react";
 import { useAuth } from "../appAuth";
 import { EmptyState } from "../ui";
 import { Sheet } from "./Students";
@@ -17,6 +17,9 @@ import Thread from "../Thread";
 import { receivedBookings, slotDay, slotTime, isPast } from "../bookingStore";
 import { unreadByBooking } from "../socialStore";
 import { KIND_LABEL } from "./teachingStore";
+import { myThreads, ago } from "../lessonRequests";
+import { LESSON_LABELS } from "../marketplace";
+import { RequestConversation } from "./LearnerRequests";
 
 export default function Messages({ onRead }) {
   const { user } = useAuth();
@@ -25,12 +28,16 @@ export default function Messages({ onRead }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(null);
+  const [threads, setThreads] = useState([]);
+  const [openThread, setOpenThread] = useState(null);
 
   const refresh = useCallback(async () => {
-    const [{ rows: r, error: e }, u] = await Promise.all([
+    const [{ rows: r, error: e }, u, { rows: t }] = await Promise.all([
       receivedBookings(user?.id, { status: ["requested", "accepted"] }),
       unreadByBooking(user?.id),
+      myThreads(),
     ]);
+    setThreads(t.filter(x => x.i_am === "instructor"));
     /* A guest booking (sql/29) has nobody on the other end to read a
        thread — they booked with an email and a phone number instead. */
     setRows(r.filter(b => !isPast(b) && b.learner_id));
@@ -64,6 +71,53 @@ export default function Messages({ onRead }) {
     );
   }
 
+  const requestList = threads.length > 0 && (
+    <div className="mb-5">
+      <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400 inline-flex items-center gap-1.5">
+        <Megaphone size={13} /> Learner requests you answered
+      </p>
+      <div className="space-y-2">
+        {threads.map(t => (
+          <button key={t.request_id}
+            onClick={() => setOpenThread(t)}
+            className="w-full text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="flex items-baseline gap-2">
+                <span className="flex-1 truncate font-bold text-sm text-slate-900 dark:text-white">
+                  {t.other_name} · {LESSON_LABELS[t.lesson_kind] || "Lesson"}, {t.area || t.county}
+                </span>
+                <span className="shrink-0 text-[11px] text-slate-400">{ago(t.last_at)}</span>
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                {t.last_from_me ? "You: " : ""}{t.last_body}
+              </p>
+            </div>
+            {t.unread > 0 && (
+              <span className="shrink-0 rounded-full bg-emerald-500 text-slate-900 text-[11px] font-black px-2 py-0.5 tabular-nums">
+                {t.unread}
+              </span>
+            )}
+            <ChevronRight size={16} className="shrink-0 text-slate-400" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const requestSheet = openThread && (
+    <RequestConversation
+      request={{ id: openThread.request_id, first_name: openThread.other_name,
+        lesson_kind: openThread.lesson_kind, open: openThread.request_open }}
+      meId={user?.id}
+      onClose={() => { setOpenThread(null); refresh(); onRead?.(); }}
+      onRead={onRead}
+    />
+  );
+
+  if (!rows.length && threads.length) {
+    return <>{requestList}{requestSheet}</>;
+  }
+
   if (!rows.length) {
     return (
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-8">
@@ -78,6 +132,8 @@ export default function Messages({ onRead }) {
 
   return (
     <>
+      {requestList}
+      {requestSheet}
       <p className="text-xs text-slate-500 dark:text-slate-400">
         One thread per upcoming lesson. Both of you can use it until the
         lesson is over.

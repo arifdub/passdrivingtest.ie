@@ -24,7 +24,19 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Send, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { listMessages, sendMessage, markThreadRead } from "./socialStore";
 
-export default function Thread({ bookingId, meId, closed, onSent, onRead }) {
+/* `source` swaps the storage: a lesson-request conversation (sql/32) passes
+   { list, send, markRead } and reuses everything else here. Without it,
+   this is the booking thread it always was. */
+export default function Thread({
+  bookingId, meId, closed, onSent, onRead, source,
+  emptyText = "Nothing yet. Use this for the small things — where you are, if you're running late.",
+  closedText = "This lesson is over, so the thread is closed.",
+}) {
+  const io = source || {
+    list: () => listMessages(bookingId),
+    send: (text) => sendMessage(bookingId, meId, text),
+    markRead: () => markThreadRead(bookingId),
+  };
   const [rows, setRows] = useState([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -33,14 +45,15 @@ export default function Thread({ bookingId, meId, closed, onSent, onRead }) {
   const endRef = useRef(null);
 
   const refresh = useCallback(async (markRead = true) => {
-    const { rows: r, error: e } = await listMessages(bookingId);
+    const { rows: r, error: e } = await io.list();
     setRows(r); setError(e); setLoading(false);
     if (markRead && r.length) {
-      await markThreadRead(bookingId);
+      await io.markRead();
       /* Tells whoever is showing an unread count that it just changed. */
       onRead?.();
     }
-  }, [bookingId, onRead]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId, onRead, source]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -61,8 +74,7 @@ export default function Thread({ bookingId, meId, closed, onSent, onRead }) {
       <div className="max-h-72 overflow-y-auto space-y-2 pr-0.5">
         {rows.length === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center leading-relaxed">
-            Nothing yet. Use this for the small things — where you are, if
-            you're running late.
+            {emptyText}
           </p>
         ) : rows.map(m => {
           const mine = m.sender_id === meId;
@@ -96,7 +108,7 @@ export default function Thread({ bookingId, meId, closed, onSent, onRead }) {
 
       {closed ? (
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 text-center">
-          This lesson is over, so the thread is closed.
+          {closedText}
         </p>
       ) : (
         <form
@@ -105,7 +117,7 @@ export default function Thread({ bookingId, meId, closed, onSent, onRead }) {
             e.preventDefault();
             if (!text.trim() || sending) return;
             setSending(true); setError(null);
-            const { ok, error: err } = await sendMessage(bookingId, meId, text);
+            const { ok, error: err } = await io.send(text);
             setSending(false);
             if (!ok) { setError(err); return; }
             setText("");
