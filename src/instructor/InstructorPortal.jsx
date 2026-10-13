@@ -582,35 +582,17 @@ export function InstructorDashboard({
     return () => { off = true; };
   }, [user?.id]);
 
-  const firstName = (profile?.full_name || "").trim().split(/\s+/)[0]
-    || (user?.email || "").split("@")[0];
-
   return (
     <>
       {/* ---------------------------------------------------------------- */}
-      {/* Greeting                                                         */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white p-4 shadow-lg shadow-blue-900/20">
-        <p className="text-sm font-semibold text-blue-100">{greeting()},</p>
-        <h2 className="text-2xl font-black tracking-tight capitalize">
-          {firstName} <span className="not-italic">👋</span>
-        </h2>
-        <p className="mt-1 text-sm text-blue-100 leading-relaxed">
-          {counts.today
-            ? `You have ${counts.today} lesson${counts.today === 1 ? "" : "s"} on today.`
-            : "Your students, lessons and bookings, all in one place."}
-        </p>
-      </div>
-
-      {/* ---------------------------------------------------------------- */}
       {/* "Your phone will not ring"                                       */}
       {/* ---------------------------------------------------------------- */}
-      {/* Directly under the greeting, because the toggle itself lives in
+      {/* At the top, because the toggle itself lives in
           the bell menu — which somebody only opens when they already
           suspect there is something waiting. It renders nothing when
           notifications are on, when the browser cannot do push, or when
           there is nothing the person could act on. */}
-      <PushNudge />
+      <div className="mb-3 empty:hidden"><PushNudge /></div>
 
       {/* ---------------------------------------------------------------- */}
       {/* Where to go                                                      */}
@@ -619,7 +601,7 @@ export function InstructorDashboard({
           about 38px for a label, and "Enquiries" needs sixty — it rendered
           as "Enquirie". A 2x2 grid there is bigger to hit and reads
           properly; 360px and up gets the row of four. */}
-      <div className="mt-3 grid grid-cols-2 min-[360px]:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 min-[360px]:grid-cols-4 gap-2">
         {QUICK.map(({ id, label, icon: Icon, tone }) => (
           <button
             key={id}
@@ -797,15 +779,6 @@ export function InstructorDashboard({
       <ShareLink profile={profile} />
     </>
   );
-}
-
-/* Morning, afternoon or evening, by the clock on the device — which is the
-   instructor's own clock, which is the one that matters. */
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
 }
 
 const QUICK_TONES = {

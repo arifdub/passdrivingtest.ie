@@ -64,6 +64,12 @@ describe("the instructor dashboard", () => {
     expect(html).not.toContain("Learners pay you directly");
     expect(html).not.toContain("even with the app closed");
   });
+  it("opens straight on the shortcuts, with no greeting banner above them", () => {
+    const html = render();
+    expect(html).not.toMatch(/Good (morning|afternoon|evening)/);
+    expect(html).not.toContain("all in one place");
+    expect(html.indexOf("Students")).toBeLessThan(html.indexOf("Your booking page"));
+  });
 });
 
 describe("help", () => {
